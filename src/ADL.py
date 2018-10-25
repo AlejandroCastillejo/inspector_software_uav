@@ -8,6 +8,7 @@ import smach_ros
 
 from software_uav.srv import *
 
+
 paused_mission = False
 datos ={'paused_mission' : 'False',}
 with open('file.json', 'w') as f:
