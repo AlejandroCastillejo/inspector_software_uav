@@ -1,6 +1,6 @@
----
-nav_msgs/Path[] MissionPaths
+# nav_msgs/Path[] MissionPaths
+nav_msgs/Path MissionPath
 # int32[] H_d
 int32 h_d
+---
 bool MissionReceived
-int32 h2
