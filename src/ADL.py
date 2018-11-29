@@ -5,6 +5,7 @@ import math
 import copy
 
 import rospy
+# import rosmultimaster_launch
 import smach
 import smach_ros
 import time
@@ -31,15 +32,15 @@ loaded_mission = False
 # define Standby state
 class Standby_State(smach.State):
     def __init__(self):
-        smach.State.__init__(self, outcomes=['start_new_mission','resume_mission','download_files'], input_keys = [], output_keys=['H_d'])
+        smach.State.__init__(self, outcomes=['start_new_mission','to_paused_state','download_files'], input_keys = [], output_keys=[])
         self.start = False
     
     def execute(self, userdata):
-        with open('mission_status.json') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json') as f:
             status = json.load(f)
             paused_mission = status['paused_mission']
         if(paused_mission == 'True'):
-            return 'resume_mission'
+            return 'to_paused_state'
         else:
             rospy.loginfo('UAV Ready. Waiting to receive order')
             self.stby_flag = False
@@ -58,11 +59,10 @@ class Standby_State(smach.State):
                 path = []
                 for pos in MissionPath:
                     wp = {"x": pos.pose.position.x, "y" : pos.pose.position.y, "z" : pos.pose.position.z}
-                    # wp = pos
                     path.append(wp)
                 data = {"h_d": self.H_d, "path": path}
                 print data
-                with open('mission_wps.json','w') as f:
+                with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json','w') as f:
                     json.dump(data, f)
                 ##
                 rospy.loginfo('Mission path received. Waiting for starting order')
@@ -75,21 +75,24 @@ class Standby_State(smach.State):
                 return StbyActionServiceResponse(True)
            
             stby_action_srv = rospy.Service('stby_action_service', StbyActionService, stby_action_service_cb)
+            # stby_action_srv = gcs_master.Service('stby_action_service', StbyActionService, stby_action_service_cb)
             mission_srv = rospy.Service('mission_service_0', MissionService, mission_service_cb)
+            # mission_srv = gcs_master.Service('mission_service_0', MissionService, mission_service_cb)
             # while not self.stby_flag:
             while True:
                 if self.action == 1:
-                    if loaded_mission:
-                        userdata.H_d = self.H_d
+                    # if loaded_mission:
+                    if True:  ##test
+                        #userdata.H_d = self.H_d
                         # self.stby_flag = True
                         stby_action_srv.shutdown()
                         mission_srv.shutdown()
                         status ={'paused_mission' : 'False'}
-                        with open('mission_status.json', 'w') as f:
+                        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json', 'w') as f:
                             json.dump(status, f)
                         return 'start_new_mission'
                     else:
-                        rospy.loginfo('Not mission available. Please load mission path')
+                        rospy.loginfo('No mission available. Please load mission path')
                         self.action = 0
                 elif self.action == 2:
                     # self.stby_flag = True
@@ -127,7 +130,7 @@ class TakeOff_State(smach.State):
         # self.H_d = userdata.H_d
         # takeOff_flag = False
         # while not takeOff_flag and not stop_flag:
-        with open('mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
             mission = json.load(f)
         H_d = mission['h_d']
 
@@ -148,13 +151,13 @@ class TakeOff_State(smach.State):
                     # rospy.sleep(0.1)
                 # height_subscriber = rospy.Subscriber("dji_sdk/height_above_takeoff", Float32, height_cb, queue_size = 1)
                 print "test5"
-                while (abs(H_d - current_height)) > 0.2:
+                while abs(H_d - float(current_height)) > 0.4:
                 # while (abs(3.0 - self.current_height)) > 0.11:     ##test
                     if stop_flag:    # Mission manually stopped or battery low
                         return 'stop_mission' 
-                    print "stop_flag:", stop_flag
-                    print abs(H_d - current_height)
-                    rospy.loginfo(rospy.get_caller_id() + "Height above takeoff: %f", current_height)
+                    # print "stop_flag:", stop_flag
+                    # print abs(H_d - current_height)
+                    # rospy.loginfo(rospy.get_caller_id() + "Height above takeoff: %f", current_height)
                     rospy.sleep(0.1)
                 print "test6"
                 # height_subscriber.unregister()
@@ -177,7 +180,7 @@ class GoToWp01_State(smach.State):
     def execute(self,userdata):
         rospy.loginfo('Mission status: Positioning... flying on safe height')
         # while True:
-        with open('mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
             mission = json.load(f)
         target_wp = PoseStamped()
         target_wp.pose.position.x = mission['path'][0]['x']
@@ -215,7 +218,7 @@ class GoToWp1_State(smach.State):
 
     def execute(self,userdata):
         rospy.loginfo('Mission status: Possitioning... going to sweep height')
-        with open('mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
             mission = json.load(f)
         target_wp = PoseStamped()
         target_wp.pose.position.x = mission['path'][0]['x']
@@ -251,7 +254,7 @@ class Sweep_State(smach.State):
 
     def execute(self,userdata):
         rospy.loginfo('Mission status: Sweep')
-        with open('mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
             mission = json.load(f)
         wayPoints_left_ = copy.deepcopy(mission['path'])
 
@@ -269,7 +272,7 @@ class Sweep_State(smach.State):
             wayPoints_left_.pop(0)
             userdata.wayPoints_left = wayPoints_left_
         status ={'paused_mission' : 'False'}
-        with open('mission_status.json', 'w') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json', 'w') as f:
             json.dump(status, f)
         return 'sweep_finished'
             
@@ -281,7 +284,7 @@ class GoToHd_State(smach.State):
         smach.State.__init__(self, outcomes=['at_h_d'])
 
     def execute(self,userdata):
-        with open('mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
             mission = json.load(f)
         H_d = mission['h_d']
         rospy.loginfo('Mission status: Going back Home')
@@ -345,12 +348,15 @@ class SaveCurrentPosition_State(smach.State):
 
     def execute(self,userdata):
         rospy.loginfo('Mission status: Saving Current Position')
-        data = {"h_d": userdata.H_d, "path": userdata.wayPoints_left}
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
+            mission = json.load(f)
+        H_d = mission['h_d']
+        data = {"h_d": H_d, "path": userdata.wayPoints_left}
         print data
-        with open('mission_wps.json','w') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json','w') as f:
             json.dump(data, f)
         status ={'paused_mission' : 'True'}
-        with open('mission_status.json', 'w') as f:
+        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json', 'w') as f:
             json.dump(status, f)
 
         print 'current position and wayPoints_left saved'
@@ -370,18 +376,22 @@ class Pause_State(smach.State):
         def paused_st_action_service_cb(req):
             self.action = req.paused_action
             return PausedStActionServiceResponse(True)
+        # def paused_mission_server():
         paused_st_action_srv = rospy.Service('paused_state_action_service', PausedStActionService, paused_st_action_service_cb)
+
+        # paused_st_action_srv = gcs_master.Service('paused_state_action_service', PausedStActionService, paused_st_action_service_cb)
 
         while True:
             if self.action == 1:
                 rospy.loginfo('Canceling paused mission')
                 status ={'paused_mission' : 'False'}
-                with open('mission_status.json', 'w') as f:
+                with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json', 'w') as f:
                     json.dump(status, f)
                 paused_st_action_srv.shutdown()
                 return 'cancel_mission'
             elif self.action == 2:
                 rospy.loginfo('Resuming paused mission')
+
                 paused_st_action_srv.shutdown()
                 return 'resume'
    
@@ -428,6 +438,7 @@ def stop_mission_cb(req):
 
 def stop_mission_server():
     stop_srv = rospy.Service('stop_service', StopService, stop_mission_cb)
+    # stop_srv = gcs_master.Service('stop_service', StopService, stop_mission_cb)
 
 
 ##GO TO WAYPOINT FUNCTION
@@ -438,7 +449,7 @@ def goToWaypoint_function (self, target_wp, stop_activated):
     go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
     resp = go_to_waypoint_client(target_wp, False)
     x_left, y_left, z_left = 1, 1, 1
-    while math.sqrt(x_left**2 + y_left**2) > 0.2 or abs(z_left) >0.2:
+    while math.sqrt(x_left**2 + y_left**2) > 0.4 or abs(z_left) >0.4:
         print '\n going to wp', target_wp.pose.position
         print 'currrent', current_pos.point
         x_left = current_pos.point.x - target_wp.pose.position.x 
@@ -454,10 +465,17 @@ def goToWaypoint_function (self, target_wp, stop_activated):
         rospy.sleep(0.1)
     print 'at wp', target_wp.pose.position
     
+def paused_st_action_service_cb(req):
+        self.action = req.paused_action
+        return PausedStActionServiceResponse(True)
+def paused_mission_server():
+    paused_st_action_srv = rospy.Service('paused_state_action_service', PausedStActionService, paused_st_action_service_cb)
 
 ## main
 def main():
     rospy.init_node('ADL_state_machine')
+
+     # gcs_master = rosmultimaster.Adaptor (host='192.168.1.2', port=11311, name='gcs_master', anonymous=True)
 
     # Subscribe to local possiontion topic
     def local_pos_cb(_current_pos):
@@ -486,10 +504,10 @@ def main():
     with sm:
         # Add states to the container
         smach.StateMachine.add('STANDBY',Standby_State(), 
-                                transitions={'start_new_mission':'MISSION','resume_mission':'PAUSE_STATE','download_files':'FILES_DOWNLOADING'}, 
+                                transitions={'start_new_mission':'MISSION','to_paused_state':'PAUSE_STATE','download_files':'FILES_DOWNLOADING'}, 
                                 remapping = {'H_d' : 'H_d'})
         ## Create sub state machine for Mission
-        sm_mission = smach.StateMachine(outcomes=['end_without_downloading','download_files','mission_paused'], input_keys=['H_d'])
+        sm_mission = smach.StateMachine(outcomes=['end_without_downloading','download_files','mission_paused'], input_keys=[])
         
         # Open stop_mission server
         stop_mission_server()
