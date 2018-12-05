@@ -2,6 +2,8 @@
 
 import json
 import math
+import numpy as np
+from tf.transformations import euler_from_quaternion, quaternion_from_euler
 import copy
 
 import rospy
@@ -10,7 +12,7 @@ import smach
 import smach_ros
 import time
 from std_msgs.msg import Float32, UInt8
-from geometry_msgs.msg import PoseStamped, PointStamped
+from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion
 
 from inspector_software_uav.srv import *
 from uav_abstraction_layer.srv import *
@@ -24,7 +26,7 @@ from uav_abstraction_layer.srv import *
 stop_flag = False
 flight_status = UInt8
 current_pos = PointStamped()
-current_height = Float32
+# current_height = Float32
 auto_download = False
 loaded_mission = False
 
@@ -121,7 +123,7 @@ class TakeOff_State(smach.State):
         smach.State.__init__(self, outcomes=['takeOff_finished','stop_mission'], input_keys = [], output_keys=['wp_00'])
         #self.end = False
 
-    def execute(self,userdata):
+    def execute(self, userdata):
         # while not stop_flag:
         print "test stop_flag"
         rospy.loginfo('Mission status: Waiting for takeOff Server')
@@ -151,7 +153,7 @@ class TakeOff_State(smach.State):
                     # rospy.sleep(0.1)
                 # height_subscriber = rospy.Subscriber("dji_sdk/height_above_takeoff", Float32, height_cb, queue_size = 1)
                 print "test5"
-                while abs(H_d - float(current_height)) > 0.4:
+                while abs(H_d - current_pos.point.z) > 0.4:
                 # while (abs(3.0 - self.current_height)) > 0.11:     ##test
                     if stop_flag:    # Mission manually stopped or battery low
                         return 'stop_mission' 
@@ -165,7 +167,8 @@ class TakeOff_State(smach.State):
                 # takeOff_flag = True
                 rospy.loginfo("Take Off finished")
                 # Define wp_00
-                userdata.wp_00 = current_pos
+                userdata.wp_00 = copy.deepcopy(current_pos)
+                # print 'wp_00', userdata.wp_00
                 return 'takeOff_finished'
             except rospy.ServiceException, e:
                 print "Service call failed: %s"%e
@@ -303,6 +306,7 @@ class GoToWp00_State(smach.State):
 
     def execute(self,userdata):
         rospy.loginfo('Mission status: Going back Home')
+        print 'wp_00', userdata.wp_00
         target_wp = PoseStamped()
         target_wp.pose.position.x = userdata.wp_00.point.x
         target_wp.pose.position.y = userdata.wp_00.point.y
@@ -447,11 +451,34 @@ def goToWaypoint_function (self, target_wp, stop_activated):
     rospy.loginfo('going to WayPoint: x:{0}, y:{1}, z:{2}'.format(target_wp.pose.position.x, target_wp.pose.position.y, target_wp.pose.position.z))
     rospy.wait_for_service('ual/go_to_waypoint')
     go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
-    resp = go_to_waypoint_client(target_wp, False)
+    
+    if (target_wp.pose.position.x - current_pos.point.x) == 0.0 and (target_wp.pose.position.y - current_pos.point.y) == 0.0:
+        yaw = current_yaw
+    else:
+        # yaw = np.arctan((target_wp.pose.position.y - current_pos.point.y) / (target_wp.pose.position.x - current_pos.point.x))
+        # yaw = math.degrees(math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x)))
+        yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
+
+    print 'yaw', yaw
+    quat = quaternion_from_euler(0, 0, yaw)
+    print 'quaternion', quat
+
+    o_wp = PoseStamped()
+    o_wp.pose.position = current_pos.point
+    o_wp.pose.orientation.x = quat[0]
+    o_wp.pose.orientation.y = quat[1]
+    o_wp.pose.orientation.z = quat[2]
+    o_wp.pose.orientation.w = quat[3]
+    print o_wp
+    go_to_waypoint_client(o_wp, False)
+    rospy.sleep(3)
+
+    o_wp.pose.position = target_wp.pose.position
+    go_to_waypoint_client(o_wp, False)
     x_left, y_left, z_left = 1, 1, 1
     while math.sqrt(x_left**2 + y_left**2) > 0.4 or abs(z_left) >0.4:
-        print '\n going to wp', target_wp.pose.position
-        print 'currrent', current_pos.point
+        # print '\n going to wp', target_wp.pose.position
+        # print 'currrent', current_pos.point
         x_left = current_pos.point.x - target_wp.pose.position.x 
         y_left = current_pos.point.y - target_wp.pose.position.y 
         z_left = current_pos.point.z - target_wp.pose.position.z
@@ -477,19 +504,30 @@ def main():
 
      # gcs_master = rosmultimaster.Adaptor (host='192.168.1.2', port=11311, name='gcs_master', anonymous=True)
 
-    # Subscribe to local possiontion topic
-    def local_pos_cb(_current_pos):
+    # # Subscribe to local possiontion topic
+    # def local_pos_cb(_current_pos):
+    #     global current_pos
+    #     current_pos = _current_pos
+    #     rospy.sleep(0.05)
+    # local_pos_subscriber = rospy.Subscriber("dji_sdk/local_position", PointStamped, local_pos_cb, queue_size = 1)
+   
+    # Subscribe to ual/pose topic
+    def local_pos_cb(pose):
         global current_pos
-        current_pos = _current_pos
+        current_pos.point = pose.pose.position
         rospy.sleep(0.05)
-    local_pos_subscriber = rospy.Subscriber("dji_sdk/local_position", PointStamped, local_pos_cb, queue_size = 1)
+        global current_yaw
+        q = pose.pose.orientation
+        euler = euler_from_quaternion([q.x, q.y, q.z, q.w])
+        current_yaw = euler[2]
+    local_pos_subscriber = rospy.Subscriber("ual/pose", PoseStamped, local_pos_cb, queue_size = 1)
     
-    # Subscribe to height topic
-    def height_cb(height):
-        global current_height
-        current_height = height.data
-        rospy.sleep(0.1)
-    height_subscriber = rospy.Subscriber("dji_sdk/height_above_takeoff", Float32, height_cb, queue_size = 1)
+    # # Subscribe to height topic
+    # def height_cb(height):
+    #     global current_height
+    #     current_height = height.data
+    #     rospy.sleep(0.1)
+    # height_subscriber = rospy.Subscriber("dji_sdk/height_above_takeoff", Float32, height_cb, queue_size = 1)
 
     #Subscribe to flight status topic
     def flight_status_cb(status):
@@ -499,15 +537,15 @@ def main():
     flight_status_subscriber = rospy.Subscriber("dji_sdk/flight_status", UInt8, flight_status_cb, queue_size=1)
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=[])#'outcome4', 'outcome5'])
+    # sm.userdata.wp_00 = PointStamped()
 
     # Open the container
     with sm:
         # Add states to the container
         smach.StateMachine.add('STANDBY',Standby_State(), 
-                                transitions={'start_new_mission':'MISSION','to_paused_state':'PAUSE_STATE','download_files':'FILES_DOWNLOADING'}, 
-                                remapping = {'H_d' : 'H_d'})
+                                transitions={'start_new_mission':'MISSION','to_paused_state':'PAUSE_STATE','download_files':'FILES_DOWNLOADING'})
         ## Create sub state machine for Mission
-        sm_mission = smach.StateMachine(outcomes=['end_without_downloading','download_files','mission_paused'], input_keys=[])
+        sm_mission = smach.StateMachine(outcomes=['end_without_downloading','download_files','mission_paused'])
         
         # Open stop_mission server
         stop_mission_server()

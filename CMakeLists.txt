@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   nav_msgs
   uav_abstraction_layer
+  usb_cam
 )
 
 ## System dependencies are found with CMake's conventions
@@ -114,7 +115,7 @@ generate_messages(
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES inspector_software_uav
- CATKIN_DEPENDS roscpp rospy std_msgs nav_msgs uav_abstraction_layer
+ CATKIN_DEPENDS roscpp rospy std_msgs nav_msgs uav_abstraction_layer usb_cam
 #  DEPENDS system_lib
 )
 
@@ -143,7 +144,7 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/inspector_software_uav_node.cpp)
-add_executable(adl src/ADL.py)
+# add_executable(adl src/ADL.py)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
