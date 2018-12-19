@@ -266,7 +266,7 @@ class Sweep_State(smach.State):
             target_wp.pose.position.x = pos['x']
             target_wp.pose.position.y = pos['y']
             target_wp.pose.position.z = pos['z']
-            # goToWp = goToWaypoint_function(self, target_wp)
+
             goToWaypoint_function(self, target_wp, True)
             if stop_flag:    # Mission manually stopped or battery low
                 wp = {"x": current_pos.point.x, "y" : current_pos.point.y, "z" : current_pos.point.z}
@@ -520,7 +520,14 @@ def main():
         q = pose.pose.orientation
         euler = euler_from_quaternion([q.x, q.y, q.z, q.w])
         current_yaw = euler[2]
-    local_pos_subscriber = rospy.Subscriber("ual/pose", PoseStamped, local_pos_cb, queue_size = 1)
+    local_pos_subscriber = rospy.Subscriber("ual/pose", PoseStamped, local_pos_cb, queue_size=1)
+
+    # Subscribe to laser altimeter /altitude topic
+    def laser_altitude_cb(data):
+        global l_altitude
+        l_altitude = data.altitude
+    laser_altitude_subscriber = rospy.Subscriber("/altitude", sensor_data, laser_altitude_cb, queue_size=1)
+
     
     # # Subscribe to height topic
     # def height_cb(height):
@@ -609,6 +616,9 @@ def main():
     # Execute SMACH plan
     outcome = sm.execute()
     
+    while not rospy.is_shutdown():
+
+
     # Wait for ctrl-c to stop the application
     # rospy.spin()
     sis.stop()
