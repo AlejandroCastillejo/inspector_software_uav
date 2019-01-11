@@ -38,7 +38,8 @@ class Standby_State(smach.State):
         self.start = False
     
     def execute(self, userdata):
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json') as f:
+        # with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json') as f:
+        with open('mission_status.json') as f:
             status = json.load(f)
             paused_mission = status['paused_mission']
         if(paused_mission == 'True'):
@@ -78,7 +79,7 @@ class Standby_State(smach.State):
            
             stby_action_srv = rospy.Service('stby_action_service', StbyActionService, stby_action_service_cb)
             # stby_action_srv = gcs_master.Service('stby_action_service', StbyActionService, stby_action_service_cb)
-            mission_srv = rospy.Service('mission_service_0', MissionService, mission_service_cb)
+            mission_srv = rospy.Service('mission_service', MissionService, mission_service_cb)
             # mission_srv = gcs_master.Service('mission_service_0', MissionService, mission_service_cb)
             # while not self.stby_flag:
             while True:
@@ -523,10 +524,10 @@ def main():
     local_pos_subscriber = rospy.Subscriber("ual/pose", PoseStamped, local_pos_cb, queue_size=1)
 
     # Subscribe to laser altimeter /altitude topic
-    def laser_altitude_cb(data):
-        global l_altitude
-        l_altitude = data.altitude
-    laser_altitude_subscriber = rospy.Subscriber("/altitude", sensor_data, laser_altitude_cb, queue_size=1)
+    # def laser_altitude_cb(data):
+    #     global l_altitude
+    #     l_altitude = data.altitude
+    # laser_altitude_subscriber = rospy.Subscriber("/altitude", sensor_data, laser_altitude_cb, queue_size=1)
 
     
     # # Subscribe to height topic
@@ -616,7 +617,7 @@ def main():
     # Execute SMACH plan
     outcome = sm.execute()
     
-    while not rospy.is_shutdown():
+    # while not rospy.is_shutdown():
 
 
     # Wait for ctrl-c to stop the application
