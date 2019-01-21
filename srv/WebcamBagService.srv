@@ -1,0 +1,7 @@
+bool ON = True
+bool OFF = False
+
+#request
+bool record
+---
+bool result
