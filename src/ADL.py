@@ -16,6 +16,7 @@ from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion
 
 from inspector_software_uav.srv import *
 from uav_abstraction_layer.srv import *
+from uav_abstraction_layer.msg import *
 
 # paused_mission = False
 # datos ={'paused_mission' : 'False',}
@@ -30,6 +31,8 @@ current_pos = PointStamped()
 auto_download = False
 loaded_mission = False
 
+current_state = UInt8()
+
 
 # define Standby state
 class Standby_State(smach.State):
@@ -38,8 +41,8 @@ class Standby_State(smach.State):
         self.start = False
     
     def execute(self, userdata):
-        # with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json') as f:
-        with open('mission_status.json') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_status.json') as f:
+        # with open('mission_status.json') as f:
             status = json.load(f)
             paused_mission = status['paused_mission']
         if(paused_mission == 'True'):
@@ -65,7 +68,7 @@ class Standby_State(smach.State):
                     path.append(wp)
                 data = {"h_d": self.H_d, "path": path}
                 print data
-                with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json','w') as f:
+                with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_wps.json','w') as f:
                     json.dump(data, f)
                 ##
                 rospy.loginfo('Mission path received. Waiting for starting order')
@@ -91,7 +94,7 @@ class Standby_State(smach.State):
                         stby_action_srv.shutdown()
                         mission_srv.shutdown()
                         status ={'paused_mission' : 'False'}
-                        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json', 'w') as f:
+                        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_status.json', 'w') as f:
                             json.dump(status, f)
                         return 'start_new_mission'
                     else:
@@ -133,7 +136,7 @@ class TakeOff_State(smach.State):
         # self.H_d = userdata.H_d
         # takeOff_flag = False
         # while not takeOff_flag and not stop_flag:
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_wps.json') as f:
             mission = json.load(f)
         H_d = mission['h_d']
 
@@ -154,13 +157,15 @@ class TakeOff_State(smach.State):
                     # rospy.sleep(0.1)
                 # height_subscriber = rospy.Subscriber("dji_sdk/height_above_takeoff", Float32, height_cb, queue_size = 1)
                 print "test5"
-                while abs(H_d - current_pos.point.z) > 0.4:
-                # while (abs(3.0 - self.current_height)) > 0.11:     ##test
+                # while abs(H_d - current_pos.point.z) > 0.4:
+                #     if stop_flag:    # Mission manually stopped or battery low
+                #         return 'stop_mission' 
+                while not(current_state == State.FLYING_AUTO):
+                # while not(current_state == 4):
+                    # print("from msg",State.FLYING_AUTO)
+                    # print(current_state)
                     if stop_flag:    # Mission manually stopped or battery low
                         return 'stop_mission' 
-                    # print "stop_flag:", stop_flag
-                    # print abs(H_d - current_height)
-                    # rospy.loginfo(rospy.get_caller_id() + "Height above takeoff: %f", current_height)
                     rospy.sleep(0.1)
                 print "test6"
                 # height_subscriber.unregister()
@@ -184,7 +189,7 @@ class GoToWp01_State(smach.State):
     def execute(self,userdata):
         rospy.loginfo('Mission status: Positioning... flying on safe height')
         # while True:
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_wps.json') as f:
             mission = json.load(f)
         target_wp = PoseStamped()
         target_wp.pose.position.x = mission['path'][0]['x']
@@ -222,7 +227,7 @@ class GoToWp1_State(smach.State):
 
     def execute(self,userdata):
         rospy.loginfo('Mission status: Possitioning... going to sweep height')
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_wps.json') as f:
             mission = json.load(f)
         target_wp = PoseStamped()
         target_wp.pose.position.x = mission['path'][0]['x']
@@ -258,7 +263,7 @@ class Sweep_State(smach.State):
 
     def execute(self,userdata):
         rospy.loginfo('Mission status: Sweep')
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_wps.json') as f:
             mission = json.load(f)
         wayPoints_left_ = copy.deepcopy(mission['path'])
 
@@ -276,7 +281,7 @@ class Sweep_State(smach.State):
             wayPoints_left_.pop(0)
             userdata.wayPoints_left = wayPoints_left_
         status ={'paused_mission' : 'False'}
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json', 'w') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_status.json', 'w') as f:
             json.dump(status, f)
         return 'sweep_finished'
             
@@ -288,7 +293,7 @@ class GoToHd_State(smach.State):
         smach.State.__init__(self, outcomes=['at_h_d'])
 
     def execute(self,userdata):
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_wps.json') as f:
             mission = json.load(f)
         H_d = mission['h_d']
         rospy.loginfo('Mission status: Going back Home')
@@ -353,15 +358,15 @@ class SaveCurrentPosition_State(smach.State):
 
     def execute(self,userdata):
         rospy.loginfo('Mission status: Saving Current Position')
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_wps.json') as f:
             mission = json.load(f)
         H_d = mission['h_d']
         data = {"h_d": H_d, "path": userdata.wayPoints_left}
         print data
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_wps.json','w') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_wps.json','w') as f:
             json.dump(data, f)
         status ={'paused_mission' : 'True'}
-        with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json', 'w') as f:
+        with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_status.json', 'w') as f:
             json.dump(status, f)
 
         print 'current position and wayPoints_left saved'
@@ -390,7 +395,7 @@ class Pause_State(smach.State):
             if self.action == 1:
                 rospy.loginfo('Canceling paused mission')
                 status ={'paused_mission' : 'False'}
-                with open('/home/nuc1/catkin_ws/src/Inspector-softwareUAV/src/mission_status.json', 'w') as f:
+                with open('/home/nuc1/catkin_ws/src/inspector_software_uav/src/mission_status.json', 'w') as f:
                     json.dump(status, f)
                 paused_st_action_srv.shutdown()
                 return 'cancel_mission'
@@ -477,7 +482,7 @@ def goToWaypoint_function (self, target_wp, stop_activated):
     o_wp.pose.position = target_wp.pose.position
     go_to_waypoint_client(o_wp, False)
     x_left, y_left, z_left = 1, 1, 1
-    while math.sqrt(x_left**2 + y_left**2) > 0.4 or abs(z_left) >0.4:
+    while math.sqrt(x_left**2 + y_left**2) > 0.6 or abs(z_left) >0.4:
         # print '\n going to wp', target_wp.pose.position
         # print 'currrent', current_pos.point
         x_left = current_pos.point.x - target_wp.pose.position.x 
@@ -523,12 +528,13 @@ def main():
         current_yaw = euler[2]
     local_pos_subscriber = rospy.Subscriber("ual/pose", PoseStamped, local_pos_cb, queue_size=1)
 
-    # Subscribe to laser altimeter /altitude topic
-    # def laser_altitude_cb(data):
-    #     global l_altitude
-    #     l_altitude = data.altitude
-    # laser_altitude_subscriber = rospy.Subscriber("/altitude", sensor_data, laser_altitude_cb, queue_size=1)
 
+    # Subscribe to ual/state topic
+    def ual_state_cb(state):
+        global current_state
+        current_state = state.state
+        # rospy.loginfo('ual state: %s' %(current_state) )
+    ual_state_subscriber = rospy.Subscriber("ual/state", State, ual_state_cb, queue_size=1)
     
     # # Subscribe to height topic
     # def height_cb(height):
