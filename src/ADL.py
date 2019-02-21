@@ -12,7 +12,7 @@ import smach
 import smach_ros
 import time
 from std_msgs.msg import Float32, UInt8
-from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion
+from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, TwistStamped
 
 from inspector_software_uav.srv import *
 from uav_abstraction_layer.srv import *
@@ -131,7 +131,6 @@ class TakeOff_State(smach.State):
         # while not stop_flag:
         print "test stop_flag"
         rospy.loginfo('Mission status: Waiting for takeOff Server')
-        print "test1"
         rospy.wait_for_service('ual/take_off')
         # self.H_d = userdata.H_d
         # takeOff_flag = False
@@ -143,20 +142,17 @@ class TakeOff_State(smach.State):
         while True:
             try:
                 take_off_client = rospy.ServiceProxy ('ual/take_off', TakeOff)
-                print "test3"
                 resp = take_off_client(H_d, False)
                 # resp = take_off_client(3.0, False)  ## test
                 if resp:
                     rospy.loginfo('Mission status: Taking Off')
                 else:
                     rospy.loginfo('Take Off Failed')
-                print "test4"
                 # self.current_height = 0
                 # def height_cb(height):
                     # self.current_height = float(height.data)
                     # rospy.sleep(0.1)
                 # height_subscriber = rospy.Subscriber("dji_sdk/height_above_takeoff", Float32, height_cb, queue_size = 1)
-                print "test5"
                 # while abs(H_d - current_pos.point.z) > 0.4:
                 #     if stop_flag:    # Mission manually stopped or battery low
                 #         return 'stop_mission' 
@@ -167,7 +163,6 @@ class TakeOff_State(smach.State):
                     if stop_flag:    # Mission manually stopped or battery low
                         return 'stop_mission' 
                     rospy.sleep(0.1)
-                print "test6"
                 # height_subscriber.unregister()
                 rospy.sleep(1)
                 # takeOff_flag = True
@@ -451,6 +446,10 @@ def stop_mission_server():
     # stop_srv = gcs_master.Service('stop_service', StopService, stop_mission_cb)
 
 
+#Publisher
+set_velocity_pub = rospy.Publisher('ual/set_velocity', TwistStamped, queue_size=1)
+
+
 ##GO TO WAYPOINT FUNCTION
 
 def goToWaypoint_function (self, target_wp, stop_activated):
@@ -458,16 +457,16 @@ def goToWaypoint_function (self, target_wp, stop_activated):
     rospy.wait_for_service('ual/go_to_waypoint')
     go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
     
-    if (target_wp.pose.position.x - current_pos.point.x) == 0.0 and (target_wp.pose.position.y - current_pos.point.y) == 0.0:
-        yaw = current_yaw
-    else:
-        # yaw = np.arctan((target_wp.pose.position.y - current_pos.point.y) / (target_wp.pose.position.x - current_pos.point.x))
-        # yaw = math.degrees(math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x)))
-        yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
+    # if (target_wp.pose.position.x - current_pos.point.x) == 0.0 and (target_wp.pose.position.y - current_pos.point.y) == 0.0:
+        # yaw = current_yaw
+    # else:
+        # yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
+    yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
 
     print 'yaw', yaw
+    print 'current_yaw', current_yaw
     quat = quaternion_from_euler(0, 0, yaw)
-    print 'quaternion', quat
+    # print 'quaternion', quat
 
     o_wp = PoseStamped()
     o_wp.pose.position = current_pos.point
@@ -476,8 +475,13 @@ def goToWaypoint_function (self, target_wp, stop_activated):
     o_wp.pose.orientation.z = quat[2]
     o_wp.pose.orientation.w = quat[3]
     print o_wp
-    go_to_waypoint_client(o_wp, False)
-    rospy.sleep(3)
+    # go_to_waypoint_client(o_wp, False)
+    # rospy.sleep(3)
+
+    velocity = TwistStamped()
+    while abs(yaw - current_yaw) > 0.1 :
+        velocity.twist.angular.z = yaw - current_yaw
+        set_velocity_pub.publish(velocity)
 
     o_wp.pose.position = target_wp.pose.position
     go_to_waypoint_client(o_wp, False)
@@ -552,6 +556,7 @@ def main():
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=[])#'outcome4', 'outcome5'])
     # sm.userdata.wp_00 = PointStamped()
+
 
     # Open the container
     with sm:
