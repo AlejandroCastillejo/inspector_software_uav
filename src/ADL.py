@@ -33,6 +33,7 @@ loaded_mission = False
 
 current_state = UInt8()
 
+acept_radio = rospy.get_param('acept_radio', 1.2)
 
 # define Standby state
 class Standby_State(smach.State):
@@ -207,7 +208,7 @@ class GoToWp01_State(smach.State):
         #     z_left = self.current_wp.point.z - target_wp.pose.position.z
         # # local_pos_subscriber.unregister()
         # return 'at_WayPoint_01'
-        goToWaypoint_function(self, target_wp, True)
+        goToWaypoint_function(self, target_wp, True, True)
         if stop_flag:    # Mission manually stopped or battery low
             return 'stop_mission'
         print 'at wp 01'
@@ -244,7 +245,7 @@ class GoToWp1_State(smach.State):
         #     x_left = self.current_wp.point.x - target_wp.pose.position.x
         #     y_left = self.current_wp.point.y - target_wp.pose.position.y
         #     z_left = self.current_wp.point.z - target_wp.pose.position.z
-        goToWaypoint_function(self, target_wp, True)
+        goToWaypoint_function(self, target_wp, True, False)
         if stop_flag:    # Mission manually stopped or battery low
             return 'stop_mission'
         print 'at wp 1'
@@ -268,7 +269,7 @@ class Sweep_State(smach.State):
             target_wp.pose.position.y = pos['y']
             target_wp.pose.position.z = pos['z']
 
-            goToWaypoint_function(self, target_wp, True)
+            goToWaypoint_function(self, target_wp, True, True)
             if stop_flag:    # Mission manually stopped or battery low
                 wp = {"x": current_pos.point.x, "y" : current_pos.point.y, "z" : current_pos.point.z}
                 wayPoints_left_.insert(0, wp)
@@ -296,7 +297,7 @@ class GoToHd_State(smach.State):
         target_wp.pose.position.x = current_pos.point.x
         target_wp.pose.position.y = current_pos.point.y
         target_wp.pose.position.z = H_d
-        goToWaypoint_function(self, target_wp, False)
+        goToWaypoint_function(self, target_wp, False, False)
         return 'at_h_d'
 
 
@@ -312,7 +313,7 @@ class GoToWp00_State(smach.State):
         target_wp.pose.position.x = userdata.wp_00.point.x
         target_wp.pose.position.y = userdata.wp_00.point.y
         target_wp.pose.position.z = userdata.wp_00.point.z
-        goToWaypoint_function(self, target_wp, False)
+        goToWaypoint_function(self, target_wp, False, True)
         return 'at_WayPoint_00'
 
 # Land
@@ -452,7 +453,7 @@ set_velocity_pub = rospy.Publisher('ual/set_velocity', TwistStamped, queue_size=
 
 ##GO TO WAYPOINT FUNCTION
 
-def goToWaypoint_function (self, target_wp, stop_activated):
+def goToWaypoint_function (self, target_wp, stop_on, rotation_on):
     rospy.loginfo('going to WayPoint: x:{0}, y:{1}, z:{2}'.format(target_wp.pose.position.x, target_wp.pose.position.y, target_wp.pose.position.z))
     rospy.wait_for_service('ual/go_to_waypoint')
     go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
@@ -461,7 +462,10 @@ def goToWaypoint_function (self, target_wp, stop_activated):
         # yaw = current_yaw
     # else:
         # yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
-    yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
+    if rotation_on:
+        yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
+    else:
+        yaw = current_yaw
 
     print 'yaw', yaw
     print 'current_yaw', current_yaw
@@ -486,13 +490,13 @@ def goToWaypoint_function (self, target_wp, stop_activated):
     o_wp.pose.position = target_wp.pose.position
     go_to_waypoint_client(o_wp, False)
     x_left, y_left, z_left = 1, 1, 1
-    while math.sqrt(x_left**2 + y_left**2) > 0.6 or abs(z_left) >0.4:
+    while math.sqrt(x_left**2 + y_left**2) > acept_radio or abs(z_left) > 0.5:
         # print '\n going to wp', target_wp.pose.position
         # print 'currrent', current_pos.point
         x_left = current_pos.point.x - target_wp.pose.position.x 
         y_left = current_pos.point.y - target_wp.pose.position.y 
         z_left = current_pos.point.z - target_wp.pose.position.z
-        if stop_flag and stop_activated:   # Mission manually stopped or battery low
+        if stop_flag and stop_on:   # Mission manually stopped or battery low
         # if stop_mission_server():
             # global stop_flag
             # stop_flag = False
