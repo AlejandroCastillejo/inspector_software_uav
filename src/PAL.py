@@ -3,21 +3,25 @@
 import rospy
 import rosbag
 
+import socket
+import gphoto2 as gp
 import os.path
 import time
 import datetime
 
 from std_msgs.msg import Int32, Time
 from sensor_msgs.msg import Image, NavSatFix
-from inspector_software_uav.srv import WebcamBagService
+from inspector_software_uav.srv import WebcamBagService, CameraCaptureService
 
-
+WIRIS_IP = '10.0.2.228'
+WIRIS_TCP_PORT = 2240
 class PAL:
 
     def __init__(self):
+        
+        ## Webcam
         self.webcam_record = False
         self.gpsA3_record = False
-
         # self.rostime = Time()
         self.desktop = os.path.expanduser("~/Desktop")
 
@@ -38,6 +42,11 @@ class PAL:
         #     self.webcam_bag = rosbag.Bag('gpsA3_bag.bag', 'w')
         #     self.webcam_bag.close()
 
+        ## WIRIS thermal camera
+        thermal_camera_capture_srv = rospy.Service('thermal_camera_capture_service', CameraCaptureService, self.thermal_camera_capture_service_cb)
+
+        ## SONY rgb camera
+        rgb_camera_capture_srv = rospy.Service('rgb_camera_capture_service', CameraCaptureService, self.rgb_camera_capture_service_cb)
 
     ## Subscribers callbacks
 
@@ -69,6 +78,26 @@ class PAL:
             self.webcam_bag.close()
             self.gpsA3_bag.close()
         return True
+
+    def thermal_camera_capture_service_cb(self, req):
+        sleep_time = 1/req.rate
+        if req.capture == True:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((WIRIS_IP, WIRIS_TCP_PORT))
+            s.send(HIWS)
+            if s.recv == 'OK':
+                rospy.loginfo("WIRIS Camera OK. Starting secuence capture")
+                while True:
+                    s.send(CIMG)
+                    rospy.sleep(sleep_time)
+            else:
+                rospy.logerr("ERROR. WIRIS Connection Failed")
+        if req.capture == False:
+            s.close()
+        
+    def rgb_camera_capture_service_cb(self, req):
+        print('Capturing rgb images')
+        
 
 
 def main():
