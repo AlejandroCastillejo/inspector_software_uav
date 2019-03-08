@@ -1,0 +1,8 @@
+bool ON = True
+bool OFF = False
+
+#request
+bool capture
+float32 rate
+---
+bool result
