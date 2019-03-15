@@ -35,6 +35,19 @@ current_state = UInt8()
 
 acept_radio = rospy.get_param('acept_radio', 1.2)
 
+## PAL srv Clients ##
+
+def telemetry_data_client(record):
+    rospy.wait_for_service('telemetry_data_service')
+    try:
+        telemetry_data = rospy.ServiceProxy('telemetry_data_service', RecordBagService)
+        resp = telemetry_data(record)
+        return resp.result
+    except rospy.ServiceException, e:
+        rospy.logerr('Service call failed: %s' %e)
+
+## State Machine ##
+
 # define Standby state
 class Standby_State(smach.State):
     def __init__(self):
@@ -144,11 +157,18 @@ class TakeOff_State(smach.State):
             try:
                 take_off_client = rospy.ServiceProxy ('ual/take_off', TakeOff)
                 resp = take_off_client(H_d, False)
-                # resp = take_off_client(3.0, False)  ## test
                 if resp:
                     rospy.loginfo('Mission status: Taking Off')
                 else:
                     rospy.loginfo('Take Off Failed')
+
+                resp_telemetry = telemetry_data_client(True)
+                if resp_telemetry:
+                    rospy.loginfo('Saving telemetry data')
+                else:
+                    rospy.logwarn('Error saving telemetry data')
+
+
                 # self.current_height = 0
                 # def height_cb(height):
                     # self.current_height = float(height.data)
@@ -457,12 +477,8 @@ def goToWaypoint_function (self, target_wp, stop_on, rotation_on):
     rospy.loginfo('going to WayPoint: x:{0}, y:{1}, z:{2}'.format(target_wp.pose.position.x, target_wp.pose.position.y, target_wp.pose.position.z))
     rospy.wait_for_service('ual/go_to_waypoint')
     go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
-    
-    # if (target_wp.pose.position.x - current_pos.point.x) == 0.0 and (target_wp.pose.position.y - current_pos.point.y) == 0.0:
-        # yaw = current_yaw
-    # else:
-        # yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
-    if rotation_on:
+
+    if rotation_on and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
         yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
     else:
         yaw = current_yaw
@@ -484,8 +500,12 @@ def goToWaypoint_function (self, target_wp, stop_on, rotation_on):
 
     velocity = TwistStamped()
     while abs(yaw - current_yaw) > 0.1 :
-        velocity.twist.angular.z = yaw - current_yaw
-        set_velocity_pub.publish(velocity)
+        if (yaw - current_yaw) > 0:
+            velocity.twist.angular.z = min (0.2, yaw - current_yaw)
+            set_velocity_pub.publish(velocity)
+        else:
+            velocity.twist.angular.z = max (-0.2, yaw - current_yaw)
+            set_velocity_pub.publish(velocity)
 
     o_wp.pose.position = target_wp.pose.position
     go_to_waypoint_client(o_wp, False)
