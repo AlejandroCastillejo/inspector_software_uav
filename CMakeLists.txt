@@ -65,6 +65,7 @@ find_package(catkin REQUIRED COMPONENTS
    PausedStActionService.srv
    StopService.srv
    RecordBagService.srv
+   ConnectionService.srv
    CameraCaptureService.srv
    DownloadService.srv
  )

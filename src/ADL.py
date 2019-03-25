@@ -32,8 +32,8 @@ current_state = UInt8()
 acept_radio = rospy.get_param('acept_radio', 1.2)
 
 ## Json files with mission information
-mission_status_file = os.path.expanduser("~/") + 'catkin_ws/src/inspector_software_uav/src/mission_status.json'
-mission_waypoints_file = os.path.expanduser("~/") + 'catkin_ws/src/inspector_software_uav/src/mission_wps.json'
+mission_status_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_status.json'
+mission_waypoints_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_wps.json'
 
 print mission_waypoints_file
 
@@ -47,8 +47,16 @@ def telemetry_data_client(record):
         return resp.result
     except rospy.ServiceException, e:
         rospy.logerr('Service call failed: %s' %e)
+        return resp.result
 
+# def rgb_camera_capture_client(capture, interval):
+#     try:
+#         rospy.wait_for_service()
+
+
+####################
 ## State Machine ##
+###################
 
 # define Standby state
 class Standby_State(smach.State):
@@ -155,50 +163,48 @@ class TakeOff_State(smach.State):
             mission = json.load(f)
         H_d = mission['h_d']
 
-        while True:
-            try:
-                take_off_client = rospy.ServiceProxy ('ual/take_off', TakeOff)
-                resp = take_off_client(H_d, False)
-                if resp:
-                    rospy.loginfo('Mission status: Taking Off')
-                else:
-                    rospy.loginfo('Take Off Failed')
-                
-                # resp_telemetry = telemetry_data_client(True)
-                # if resp_telemetry:
-                #     rospy.loginfo('Saving telemetry data')
-                # else:
-                #     rospy.logwarn('Error saving telemetry data')
+        # try:
+        #     rospy.wait_for_service('telemetry_data_service')
+        #     telemetry_data = rospy.ServiceProxy('telemetry_data_service', RecordBagService)
+        #     resp_telemetry_data = telemetry_data(record)
+        # except rospy.ServiceException, e:
+        #     rospy.logerr('telemetry_data_service call failed: %s' %e)
+            
+        resp_telemetry = telemetry_data_client(True)
+        if resp_telemetry:
+            rospy.loginfo('Saving telemetry data')
+        else:
+            rospy.logwarn('Error saving telemetry data')
+        
+        # while True:
+        try:
+            take_off_client = rospy.ServiceProxy ('ual/take_off', TakeOff)
+            resp_take_off = take_off_client(H_d, False)
+            if resp_take_off:
+                rospy.loginfo('Mission status: Taking Off')
+            else:
+                rospy.loginfo('Take Off Failed')
 
-
-                # self.current_height = 0
-                # def height_cb(height):
-                    # self.current_height = float(height.data)
-                    # rospy.sleep(0.1)
-                # height_subscriber = rospy.Subscriber("dji_sdk/height_above_takeoff", Float32, height_cb, queue_size = 1)
-                # while abs(H_d - current_pos.point.z) > 0.4:
-                #     if stop_flag:    # Mission manually stopped or battery low
-                #         return 'stop_mission' 
-                while not(current_state == State.FLYING_AUTO):
-                # while not(current_state == 4):
-                    # print("from msg",State.FLYING_AUTO)
-                    # print(current_state)
-                    if stop_flag:    # Mission manually stopped or battery low
-                        return 'stop_mission' 
-                    # print 'taking off'
-                    rospy.sleep(0.1)
-                # height_subscriber.unregister()
-                rospy.sleep(1)
-                # takeOff_flag = True
-                rospy.loginfo("Take Off finished")
-                # Define wp_00
-                userdata.wp_00 = copy.deepcopy(current_pos)
-                # print 'wp_00', userdata.wp_00
-                return 'takeOff_finished'
-            except rospy.ServiceException, e:
-                print "Service call failed: %s"%e
-            print "trying to call service in 5s"
-        rospy.sleep(5)
+            while not(current_state == State.FLYING_AUTO):
+            # while not(current_state == 4):
+                # print("from msg",State.FLYING_AUTO)
+                # print(current_state)
+                if stop_flag:    # Mission manually stopped or battery low
+                    return 'stop_mission' 
+                # print 'taking off'
+                rospy.sleep(0.1)
+            # height_subscriber.unregister()
+            rospy.sleep(1)
+            # takeOff_flag = True
+            rospy.loginfo("Take Off finished")
+            # Define wp_00
+            userdata.wp_00 = copy.deepcopy(current_pos)
+            # print 'wp_00', userdata.wp_00
+            return 'takeOff_finished'
+        except rospy.ServiceException, e:
+            print "Service call failed: %s"%e
+        # print "trying to call service in 5s"
+        # rospy.sleep(5)
 
 # Go to wp_01 (First wp latitude and longitude but positioning height)
 class GoToWp01_State(smach.State):

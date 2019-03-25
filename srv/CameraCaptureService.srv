@@ -3,6 +3,6 @@ bool OFF = False
 
 #request
 bool capture
-float32 rate
+float32 interval
 ---
 bool result
