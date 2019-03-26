@@ -21,6 +21,7 @@ WIRIS_IP = '10.0.2.228'
 WIRIS_TCP_PORT = 2240
 WIRIS_USER = 'wiris'
 WIRIS_PASSWORD = ''
+
 class PAL:
 
     def __init__(self):
@@ -225,7 +226,7 @@ class PAL:
         if not hasattr(self,'s'):
             try:
                 self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                rospy.loginfo('PAL: Created socked connection')
+                rospy.loginfo('PAL: Opening socket connection')
                 self.s.connect((WIRIS_IP, WIRIS_TCP_PORT))
                 rospy.loginfo('PAL: Socket connection on')
                 self.s.send('HIWS')
@@ -284,7 +285,9 @@ class PAL:
     ## Thermal images download 
     def thermal_camera_download_service_cb(self, req):
         try:
-            self.thermal_images_download()
+            # self.thermal_images_download()
+            self.thermal_images_download_thread = threading.Thread(target=self.thermal_images_download_thread)
+            self.thermal_images_download_thread.start()
             return True
         except Exception, e:
             rospy.logerr("PAL: Can't download files from thermal camera or files can't be deleted")
@@ -293,7 +296,9 @@ class PAL:
         # self.thermal_images_download()
         # return True
     
-    def thermal_images_download(self):
+    # def thermal_images_download(self):
+
+    def thermal_images_download_thread(self):
         ftp = ftplib.FTP(WIRIS_IP)
         ftp.login(WIRIS_USER, WIRIS_PASSWORD)
         directorylist = ftp.nlst()
@@ -347,9 +352,7 @@ class PAL:
         rospy.loginfo('PAL: Deletion finished')
         ftp.quit()
         
-
 ## end PAL Class ##
-
 
 
 
