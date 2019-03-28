@@ -2,6 +2,10 @@
 
   <arg name="n_uav" default="uav_1"/>
   <arg name="acept_radio" default="1.2"/>
+  <arg name="rgb_images_on" default="false"/>
+  <arg name="thermal_images_on" default="false"/>
+  <arg name="rgb_images_interval" default="10.0"/>
+  <arg name="thermal_images_interval" default="10.0"/>
   <arg name="resync_on_reconnect" default="$(optenv MULTIMASTER_RESYNC_ON_RECONNECT false)"/>
 
   <!-- <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" ns="$(arg n_uav)" output="screen">
@@ -42,10 +46,14 @@
       <param name="self_arming" value="true"/>
   </node> 
 
-  <!-- <node pkg="inspector_software_uav" type="ADL.py" name="adl" ns="$(arg n_uav)" output="screen" >
+  <node pkg="inspector_software_uav" type="ADL.py" name="adl" ns="$(arg n_uav)" output="screen" >
 		<param name="acep_radio" value="$(arg acept_radio)" /> 
+		<param name="rgb_images_on" value="$(arg rgb_images_on)" /> 
+		<param name="thermal_images_on" value="$(arg thermal_images_on)" /> 
+		<param name="rgb_images_interval" value="$(arg rgb_images_interval)" /> 
+		<param name="thermal_images_interval" value="$(arg thermal_images_interval)" /> 
   </node> 
-  <node pkg="inspector_software_uav" type="PAL.py" name="pal" ns="$(arg n_uav)" output="screen"/> -->
+  <node pkg="inspector_software_uav" type="PAL.py" name="pal" ns="$(arg n_uav)" output="screen"/>
   <!-- <node pkg="inspector_software_uav" type="vel_publisher.py" name="vel_publisher" ns="$(arg n_uav)" output="screen"/> -->
  
 

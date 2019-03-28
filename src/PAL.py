@@ -11,12 +11,20 @@ import sys, os, os.path
 import csv
 import time
 import datetime
+import paramiko
+from paramiko import SSHClient
+from scp import SCPClient
 
 from std_msgs.msg import Float64, Int32, Time
 from sensor_msgs.msg import Image, NavSatFix
 from inspector_software_uav.srv import RecordBagService, CameraCaptureService, DownloadService, ConnectionService
 
-# Thermal camera IP address & TCP port
+# GCS IP, user & password
+GCS_HOST = '192.168.1.190'
+GCS_USER = 'alejandro'
+GCS_PASSWORD = 'a1'
+
+# Thermal camera IP address, TCP port, user & password
 WIRIS_IP = '10.0.2.228'
 WIRIS_TCP_PORT = 2240
 WIRIS_USER = 'wiris'
@@ -39,13 +47,15 @@ class PAL:
         # Desktop path
         self.desktop = os.path.expanduser("~/Desktop")
         # Webcam Bags directory
-        self.mission_bags_dir = self.desktop +'/mission_bags/'
+        self.mission_bags_dir = self.desktop +'/Mission_Bags/'
         # RGB Images directory
         self.rgb_images_dir = self.desktop +'/RGB_Camera_Images/'
         # Thermal Images directory
         self.thermal_images_dir = self.desktop +'/Thermal_Camera_Images/'
         # Telemetry data directory
         self.telemetry_files_dir = self.desktop + '/Telemetry_Data/'
+        
+        self.dir_list = ['/Mission_Bags/', '/RGB_Camera_Images/', '/Thermal_Camera_Images/', '/Telemetry_Data/']
 
         # In case a directory doesn't exist yet, then create it
         if not os.path.exists(self.mission_bags_dir):
@@ -82,6 +92,8 @@ class PAL:
         rgb_camera_connection_srv = rospy.Service('rgb_camera_connection_service', ConnectionService, self.rgb_camera_connection_service_cb)
         rgb_camera_capture_srv = rospy.Service('rgb_camera_capture_service', CameraCaptureService, self.rgb_camera_capture_service_cb)
 
+        ## Upload data to GCS
+        data_upload_srv = rospy.Service('data_upload_service', DownloadService, self.data_upload_service_cb)
 
     ## Subscribers callbacks
 
@@ -352,6 +364,50 @@ class PAL:
         rospy.loginfo('PAL: Deletion finished')
         ftp.quit()
         
+    def data_upload_service_cb(self, req):
+        ssh = SSHClient()
+        ssh.load_system_host_keys()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            ssh.connect(GCS_HOST, username=GCS_USER, password=GCS_PASSWORD)
+        except paramiko.SSHException as error:
+            print error
+    
+        # scp = SCPClient(ssh.get_transport())
+    
+        # scp.put(self.telemetry_files_dir + 'telemetry_2019-03-26 14:28:06.csv', '~/Desktop')
+        # scp.putfo(str(self.telemetry_files_dir), '~/Desktop')
+        
+        target_dir = '~/Desktop/Mission_' + str(self.mission_start_time.strftime("%Y-%m-%d_%H:%M"))
+        print target_dir
+        # target_dir = "~/Desktop/Mission_{}".format(self.mission_start_time.strftime("%Y-%m-%d %H:%M:%S"))
+        ssh.exec_command('mkdir -p ' + target_dir)
+        for dir_ in self.dir_list:
+
+            os.system("sshpass -p '{}' scp -r {}/ {}@{}:{}".format(GCS_PASSWORD, self.desktop + dir_, GCS_USER, GCS_HOST, target_dir))
+
+            # os.system("sshpass -p '{}' scp -r {} {}@{}:{}".format(GCS_PASSWORD, self.desktop + dir_, GCS_USER, GCS_HOST, target_dir))
+            # ssh.exec_command('mkdir -p ' + target_dir)
+            # for item in os.listdir(self.desktop + dir_):
+            #     scp.put(self.desktop + dir_ + item, target_dir)
+            # self.put_dir(self.desktop + '/Telemetry_Data/', '~/Desktop')
+        return True
+
+    def put_dir(self, source, target):
+        """ Uploads the contents of the source directory to the target path. The
+            target directory needs to exists. All subdirectories in source are 
+            created under target. 
+        """
+        for item in os.listdir(source):
+            # if os.path.isfile(os.path.join(source, item)):
+            if os.path.isfile(source + item):
+                print 'isfile'
+                # self.scp.put(os.path.join(source, item), '%s/%s' % (target, item))
+                self.scp.put(source + item, '%s/%s' % (target, item))
+            else:
+                self.mkdir('%s/%s' % (target, item), ignore_existing=True)
+                self.put_dir(os.path.join(source, item), '%s/%s' % (target, item))
+
 ## end PAL Class ##
 
 
