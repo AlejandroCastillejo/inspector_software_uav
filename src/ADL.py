@@ -32,10 +32,14 @@ current_state = UInt8()
 
 ## ROS params
 acept_radio = rospy.get_param('acept_radio', 1.2)
-rgb_images_on = rospy.get_param('rgb_images_on', True)
-thermal_images_on = rospy.get_param('thermal_images_on', True)
+rgb_images_on = rospy.get_param('rgb_images_on', False)
+# rgb_images_on = rospy.get_param('uav_1/adl/rgb_images_on', True)
+thermal_images_on = rospy.get_param('thermal_images_on', False)
 rgb_images_interval = rospy.get_param('rgb_images_interval', 10.0)
 thermal_images_interval = rospy.get_param('thermal_images_interval', 10.0)
+
+print ('rgb_images_on', rgb_images_on)
+print ('type', type(rgb_images_on))
 
 ## Json files with mission information
 mission_status_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_status.json'
