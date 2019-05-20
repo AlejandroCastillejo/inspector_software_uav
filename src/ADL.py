@@ -8,19 +8,19 @@ import copy
 import os.path
 
 import rospy
-# import rosmultimaster_launch
 import smach
 import smach_ros
 import time
 from std_msgs.msg import Float32, UInt8
 from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, TwistStamped
+from sensor_msgs.msg import NavSatFix
 
 from inspector_software_uav.srv import *
 from uav_abstraction_layer.srv import *
 from uav_abstraction_layer.msg import *
 
 import PAL_clients as pal
-# from PAL_clients import PALClients
+import geo
 
 # Global variables
 stop_flag = False
@@ -28,14 +28,20 @@ auto_download = False
 loaded_mission = False
 flight_status = UInt8
 current_pos = PointStamped()
+current_gps_pos = NavSatFix()
 current_state = UInt8()
 
 ## ROS params
+uav_id = rospy.get_param('uav_id', 1)
 acept_radio = rospy.get_param('acept_radio', 1.2)
-rgb_images_on = rospy.get_param('rgb_images_on', True)
-thermal_images_on = rospy.get_param('thermal_images_on', True)
+rgb_images_on = rospy.get_param('rgb_images_on', False)
+# rgb_images_on = rospy.get_param('uav_1/adl/rgb_images_on', True)
+thermal_images_on = rospy.get_param('thermal_images_on', False)
 rgb_images_interval = rospy.get_param('rgb_images_interval', 10.0)
 thermal_images_interval = rospy.get_param('thermal_images_interval', 10.0)
+
+print ('rgb_images_on', rgb_images_on)
+print ('type', type(rgb_images_on))
 
 ## Json files with mission information
 mission_status_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_status.json'
@@ -84,10 +90,22 @@ class Standby_State(smach.State):
                 print "recibido. MissionPath = {0}".format(MissionPath)
                 ## add wayPoints to mission_wps.json
                 path = []
+                path_geo = []
+                lat_ref = current_gps_pos.latitude
+                lon_ref = current_gps_pos.longitude
+                h_ref = current_gps_pos.altitude
                 for pos in MissionPath:
-                    wp = {"x": pos.pose.position.x, "y" : pos.pose.position.y, "z" : pos.pose.position.z}
+                    latitude = pos.pose.position.latitude
+                    longitude = pos.pose.position.longitude
+                    altitude = pos.pose.position.altitude
+                    # wp = {"x": pos.pose.position.x, "y" : pos.pose.position.y, "z" : pos.pose.position.z}
+                    wp_geo = {"latitude": latitude, "longitude" : longitude, "altitude" : altitude}
+                    path_geo.append(wp_geo)
+                    x,y,z = geo.geodetic_to_enu(latitude, longitude, altitude, lat_ref, lon_ref, h_ref)
+                    wp = {"x": x, "y" : y, "z" : altitude}
                     path.append(wp)
-                data = {"h_d": self.H_d, "path": path}
+                
+                data = {"h_d": self.H_d, "path_geo": path_geo, "path": path}
                 print data
                 with open(mission_waypoints_file,'w') as f:
                     json.dump(data, f)
@@ -102,9 +120,8 @@ class Standby_State(smach.State):
                 return StbyActionServiceResponse(True)
            
             stby_action_srv = rospy.Service('stby_action_service', StbyActionService, stby_action_service_cb)
-            # stby_action_srv = gcs_master.Service('stby_action_service', StbyActionService, stby_action_service_cb)
+            # mission_srv = rospy.Service('mission_service_' + str(uav_id), MissionService, mission_service_cb)
             mission_srv = rospy.Service('mission_service', MissionService, mission_service_cb)
-            # mission_srv = gcs_master.Service('mission_service_0', MissionService, mission_service_cb)
             # while not self.stby_flag:
             while True:
                 if self.action == 1:
@@ -581,7 +598,11 @@ def paused_mission_server():
 def main():
     rospy.init_node('ADL_state_machine')
 
-
+    # Subscribe to dji gps position
+    def global_pos_cb(pose):
+        global current_gps_pos
+        current_gps_pos = pose
+    global_pos_subscriber =rospy.Subscriber("dji_sdk/gps_position", NavSatFix, global_pos_cb, queue_size=1)
 
     # # Subscribe to local possiontion topic
     # def local_pos_cb(_current_pos):
@@ -600,7 +621,6 @@ def main():
         euler = euler_from_quaternion([q.x, q.y, q.z, q.w])
         current_yaw = euler[2]
     local_pos_subscriber = rospy.Subscriber("ual/pose", PoseStamped, local_pos_cb, queue_size=1)
-
 
     # Subscribe to ual/state topic
     def ual_state_cb(state):
