@@ -33,17 +33,21 @@
 
   <include file="$(find dji_sdk)/launch/sdk.launch" ns="$(arg n_uav)" />
 
-  <!-- <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch"/> -->
+  <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch" ns="$(arg n_uav)"/>
+  <!-- <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch" /> -->
   
-  <node   pkg="sf11_altitude_sensor" name="altitude_sensor" type="altitude_sensor_node" ns="$(arg n_uav)" output="screen" >
-		<param name="serial_port" value="/dev/sf11c" /> 
+  <!-- <node   pkg="sf11_altitude_sensor" name="altitude_sensor" type="altitude_sensor_node" ns="$(arg n_uav)" output="screen" >
+		<param name="serial_port"  value="/dev/sf11c" /> 
   </node> 
- 
+  -->
 
   <node pkg="uav_abstraction_layer" type="server" name="ual" ns="$(arg n_uav)" output="screen">
       <param name="backend" value="dji"/>
-      <param name="laser_altimeter" value="false"/>
+      <!-- <param name="laser_altimeter" value="false"/> -->
+      <param name="laser_altimeter" value="true"/>
       <param name="self_arming" value="true"/>
+      <param name="xy_vel_max" value="9.0"/>
+      
   </node> 
 
   <node pkg="inspector_software_uav" type="ADL.py" name="adl" ns="$(arg n_uav)" output="screen" >
@@ -53,7 +57,11 @@
 		<param name="rgb_images_interval" value="$(arg rgb_images_interval)" /> 
 		<param name="thermal_images_interval" value="$(arg thermal_images_interval)" /> 
   </node> 
+
   <node pkg="inspector_software_uav" type="PAL.py" name="pal" ns="$(arg n_uav)" output="screen"/>
+
+  <!-- <node pkg="inspector_software_uav" type="battery_checker.py" name="battery_checker" ns="$(arg n_uav)" output="screen"/> -->
+
   <!-- <node pkg="inspector_software_uav" type="vel_publisher.py" name="vel_publisher" ns="$(arg n_uav)" output="screen"/> -->
  
 
