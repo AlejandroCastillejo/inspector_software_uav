@@ -31,6 +31,8 @@ current_pos = PointStamped()
 current_gps_pos = NavSatFix()
 current_state = UInt8()
 
+# fixed_yaw = 0.0
+
 ## ROS params
 uav_id = rospy.get_param('uav_id', 1)
 acept_radio = rospy.get_param('acept_radio', 1.2)
@@ -46,6 +48,7 @@ print ('type', type(rgb_images_on))
 ## Json files with mission information
 mission_status_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_status.json'
 mission_waypoints_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_wps.json'
+mission_data_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_data.json'
 
 print mission_waypoints_file
 
@@ -83,7 +86,10 @@ class Standby_State(smach.State):
 
             def mission_service_cb(req):
                 # userdata.H_d = req.h_d
-                self.H_d = req.h_d
+                H_d = req.h_d
+                flight_angle = req.flight_angle
+                thermal_camera_shooting_distance = req.thermal_camera_shooting_distance
+                rgb_camera_shooting_distance = req.rgb_camera_shooting_distance
                 userdata.MissionPath = req.MissionPath.poses
                 MissionPath = req.MissionPath.poses
                 print "recibido. h_d = {0}".format(req.h_d)
@@ -105,10 +111,15 @@ class Standby_State(smach.State):
                     wp = {"x": x, "y" : y, "z" : altitude}
                     path.append(wp)
                 
-                data = {"h_d": self.H_d, "path_geo": path_geo, "path": path}
-                print data
+                mission_waypoints_data = {"h_d": H_d, "path_geo": path_geo, "path": path}
+                mission_data = {"thermal_camera_shooting_distance": thermal_camera_shooting_distance, \
+                    "rgb_camera_shooting_distance": rgb_camera_shooting_distance, "flight_angle": flight_angle}
+                print mission_waypoints_data
+                print mission_data
                 with open(mission_waypoints_file,'w') as f:
-                    json.dump(data, f)
+                    json.dump(mission_waypoints_data, f)
+                with open(mission_data_file, 'w') as f:
+                    json.dump(mission_data, f)
                 ##
                 rospy.loginfo('ADL: Mission path received. Waiting for starting order')
                 global loaded_mission
@@ -241,7 +252,7 @@ class GoToWp01_State(smach.State):
         target_wp.pose.position.y = mission['path'][0]['y']
         target_wp.pose.position.z = mission['h_d']
       
-        goToWaypoint_function(self, target_wp, True, False)
+        goToWaypoint_function(self, target_wp, True, True)
         if stop_flag:    # Mission manually stopped or battery low
             return 'stop_mission'
         rospy.loginfo('at wp 01')
@@ -385,7 +396,7 @@ class GoToWp00_State(smach.State):
         target_wp.pose.position.x = userdata.wp_00.point.x
         target_wp.pose.position.y = userdata.wp_00.point.y
         target_wp.pose.position.z = userdata.wp_00.point.z
-        goToWaypoint_function(self, target_wp, False, False)
+        goToWaypoint_function(self, target_wp, False, True)
         return 'at_WayPoint_00'
 
 # Land
@@ -535,18 +546,22 @@ set_velocity_pub = rospy.Publisher('ual/set_velocity', TwistStamped, queue_size=
 
 ##GO TO WAYPOINT FUNCTION
 
-def goToWaypoint_function (self, target_wp, stop_on, rotation_on):
+def goToWaypoint_function (self, target_wp, stop_on, heading_on):
     rospy.loginfo('ADL: going to WayPoint: x:{0}, y:{1}, z:{2}'.format(target_wp.pose.position.x, target_wp.pose.position.y, target_wp.pose.position.z))
     rospy.wait_for_service('ual/go_to_waypoint')
     go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
 
-    if rotation_on and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
+    if heading_on and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
         yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
     else:
-        yaw = current_yaw
+        # yaw = current_yaw
+        # yaw = fixed_yaw
+        with open(mission_data_file) as f:
+            data = json.load(f)
+            yaw = math.pi/180*data['flight_angle']
 
-    print 'yaw', yaw
-    print 'current_yaw', current_yaw
+    # print 'yaw', yaw
+    # print 'current_yaw', current_yaw
     quat = quaternion_from_euler(0, 0, yaw)
     # print 'quaternion', quat
 
@@ -563,11 +578,13 @@ def goToWaypoint_function (self, target_wp, stop_on, rotation_on):
     velocity = TwistStamped()
     while abs(yaw - current_yaw) > 0.1 :
         if (yaw - current_yaw) > 0:
-            velocity.twist.angular.z = min (0.2, yaw - current_yaw)
+            velocity.twist.angular.z = min (0.6, yaw - current_yaw)
             set_velocity_pub.publish(velocity)
         else:
-            velocity.twist.angular.z = max (-0.2, yaw - current_yaw)
+            velocity.twist.angular.z = max (-0.6, yaw - current_yaw)
             set_velocity_pub.publish(velocity)
+        print ('yaw: ', yaw)
+        print ('current_yaw', current_yaw)
 
     o_wp.pose.position = target_wp.pose.position
     go_to_waypoint_client(o_wp, False)

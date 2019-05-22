@@ -13,7 +13,7 @@ class PostProcessing:
 
         self.desktop = os.path.expanduser("~/Desktop")
         # call(["ls"])
-        self.bags_extraction()
+        # self.bags_extraction()
         self.images_georef()
 
     def bags_extraction(self):
