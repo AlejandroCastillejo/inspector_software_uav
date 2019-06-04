@@ -1,8 +1,10 @@
 <launch>
 
   <arg name="n_uav" default="uav_1"/>
-  <arg name="acept_radio" default="1.2"/>
   <arg name="resync_on_reconnect" default="$(optenv MULTIMASTER_RESYNC_ON_RECONNECT false)"/>
+
+  <arg name="laser_altimeter" default="false" />
+  <arg name="acept_radio" default="1.2"/>
 
   <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" ns="$(arg n_uav)" output="screen">
     <param name="video_device" value="/dev/video0" />
@@ -32,10 +34,11 @@
 
   <!-- <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch"/> -->
   
-  <node   pkg="sf11_altitude_sensor" name="altitude_sensor" type="altitude_sensor_node" ns="$(arg n_uav)" output="screen" >
-		<param name="serial_port" value="/dev/sf11c" /> 
-  </node> 
- 
+  <group if="$(arg laser_altimeter)">
+    <node   pkg="sf11_altitude_sensor" name="altitude_sensor" type="altitude_sensor_node" ns="$(arg n_uav)" output="screen" >
+	  	<param name="serial_port" value="/dev/sf11c" /> 
+    </node> 
+  </group>
 
   <node pkg="uav_abstraction_layer" type="server" name="ual" ns="$(arg n_uav)" output="screen">
       <param name="backend" value="dji"/>
@@ -52,7 +55,7 @@
  
 
 
-  <!-- <node pkg="master_discovery_fkie" type="master_discovery" name="master_discovery" respawn="true" respawn_delay="5" /> -->
+  <node pkg="master_discovery_fkie" type="master_discovery" name="master_discovery" respawn="true" respawn_delay="5" />
   
   <!-- <node pkg="master_sync_fkie" type="master_sync" name="master_sync" respawn="true" respawn_delay="5" >
     <rosparam subst_value="true">
