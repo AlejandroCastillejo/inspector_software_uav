@@ -150,9 +150,15 @@ class PAL:
             time_now = datetime.datetime.now()
             self.webcam_bag = rosbag.Bag(self.mission_bags_dir +'/webcam_{0}.bag'.format(time_now.strftime("%Y-%m-%d %H:%M:%S_")), 'w')
             self.webcam_record = req.record
+            
+            self.gpsA3_bag = rosbag.Bag(self.mission_bags_dir +'/gpsA3_{0}.bag'.format(self.mission_start_time.strftime("%Y-%m-%d %H:%M:%S")), 'w')
+            self.gps_record = req.record
         elif req.record == False:
             self.webcam_record = req.record
             self.webcam_bag.close()
+            
+            self.gps_record = req.record
+            self.gpsA3_bag.close()  
         return True
 
     ## RGB Camera

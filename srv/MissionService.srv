@@ -1,5 +1,8 @@
 # nav_msgs/Path MissionPath
 geographic_msgs/GeoPath MissionPath
 int32 h_d
+float32 flight_angle
+float32 thermal_camera_shooting_distance
+float32 rgb_camera_shooting_distance
 ---
 bool MissionReceived
