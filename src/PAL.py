@@ -3,6 +3,7 @@
 import rospy
 import rosbag
 
+import math
 import socket
 import ftplib
 import gphoto2 as gp
@@ -17,6 +18,7 @@ from scp import SCPClient
 
 from std_msgs.msg import Float64, Int32, Time
 from sensor_msgs.msg import Image, NavSatFix
+from geometry_msgs.msg import TwistStamped
 from inspector_software_uav.srv import RecordBagService, CameraCaptureService, DownloadService, ConnectionService
 
 # GCS IP, user & password
@@ -74,6 +76,7 @@ class PAL:
         rospy.Subscriber('usb_cam/image_raw', Image, self.usb_cam_cb)
         rospy.Subscriber('dji_sdk/gps_position', NavSatFix, self.dji_gps_position_cb)
         rospy.Subscriber('laser_altitude', Float64, self.laser_altitude_cb)
+        rospy.Subscriber('ual/velocity', TwistStamped, self.velocity_cb)
 
     ## ROSservices
         # Telemetry: DJI A3 autopilot GPS & Laser altimeter
@@ -118,7 +121,10 @@ class PAL:
         if self.telemetry_save:
             self.telemetry_file_writer.writerow({'Time':rospy.get_rostime(), 'Latitude':gps_msg.latitude, 'Longitude':gps_msg.longitude, 'Altitude':gps_msg.altitude, 'Laser_altitude':self.current_laser_altitude})
 
-
+    def velocity_cb(self, data):
+        x_vel = data.twist.linear.x
+        y_vel = data.twist.linear.y
+        self.current_xy_vel = math.sqrt(x_vel**2 + y_vel**2)
 
     ## Services callbacks
 
@@ -175,7 +181,7 @@ class PAL:
                 return False
 
     def rgb_camera_capture_service_cb(self, req):
-        self.rgb_interval = req.interval
+        self.rgb_camera_shooting_distance = req.shooting_distance
         
         if req.capture == True:
             # if not hasattr(self, 'rgb_file'):
@@ -205,7 +211,7 @@ class PAL:
         while True:
             while self.rgb_capture == True:
                 print ('calling rgb camera capture function')
-                next_call = time.time() + self.rgb_interval
+                next_call = time.time() + self.rgb_camera_shooting_distance / min(self.current_xy_vel, 2.0)
                 self.rgb_camera_capture_function()
                 if (next_call - time.time()) > 0:
                     time.sleep(next_call - time.time())
@@ -264,7 +270,7 @@ class PAL:
     
 
     def thermal_camera_capture_service_cb(self, req):
-        self.thermal_camera_interval = req.interval
+        self.thermal_camera_shooting_distance = req.shooting_distance
 
         if self.thermal_camera_connected:
             if req.capture == True:
@@ -284,7 +290,8 @@ class PAL:
     def thermal_camera_capture_thread(self):
         while True:
             while self.thermal_camera_capture:
-                interval = self.thermal_camera_interval
+                # interval = self.thermal_camera_interval
+                interval = self.thermal_camera_shooting_distance / min(self.current_xy_vel, 2.0)
                 next_call = time.time() + interval
                 self.s.send('CIMG')
                 capt_resp = self.s.recv(3)

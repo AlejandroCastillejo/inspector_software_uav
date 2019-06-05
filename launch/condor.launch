@@ -1,0 +1,88 @@
+<launch>
+
+  <arg name="n_uav" default="uav_1"/>
+  <arg name="acept_radio" default="1.2"/>
+  <arg name="rgb_images_on" default="True"/>
+  <arg name="thermal_images_on" default="True"/>
+  <arg name="resync_on_reconnect" default="$(optenv MULTIMASTER_RESYNC_ON_RECONNECT false)"/>
+
+  <!-- <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" ns="$(arg n_uav)" output="screen">
+    <param name="video_device" value="/dev/video0" />
+    <param name="image_width" value="640" />
+    <param name="image_height" value="480" />
+    <param name="pixel_format" value="yuyv" />
+    <param name="camera_frame_id" value="usb_cam" />
+    <param name="io_method" value="mmap"/>
+  </node> -->
+
+ <!-- <node name="image_view" pkg="image_view" type="image_view" respawn="false" ns="$(arg n_uav)" output="screen">
+    <remap from="image" to="/$(arg n_uav)/usb_cam/image_raw"/>
+    <param name="autosize" value="true" />
+  </node> -->
+   
+ <!-- <node name="image_view" pkg="image_view" type="image_view" respawn="false" ns="$(arg n_uav)" output="screen">
+    <remap from="image" to="/$(arg n_uav)/usb_cam/image_raw"/>
+  </node> -->
+
+  <!-- <node pkg="image_view" type="image_saver" name="image_saver" ns="$(arg n_uav)" respawn="true" respawn_delay="5">
+      <param name="save_all_image" value="false"/>
+      <param name="filename_format" value="pict%04i.jpg"/>
+  </node>  -->
+
+  <include file="$(find dji_sdk)/launch/sdk.launch" ns="$(arg n_uav)" />
+
+  <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch" ns="$(arg n_uav)"/>
+  <!-- <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch" /> -->
+  
+  <!-- <node   pkg="sf11_altitude_sensor" name="altitude_sensor" type="altitude_sensor_node" ns="$(arg n_uav)" output="screen" >
+		<param name="serial_port"  value="/dev/sf11c" /> 
+  </node> 
+  -->
+
+  <node pkg="uav_abstraction_layer" type="server" name="ual" ns="$(arg n_uav)" output="screen">
+      <param name="backend" value="dji"/>
+      <!-- <param name="laser_altimeter" value="false"/> -->
+      <param name="laser_altimeter" value="true"/>
+      <param name="self_arming" value="true"/>
+      <param name="xy_vel_max" value="3.5"/>
+      
+  </node> 
+
+  <node pkg="inspector_software_uav" type="ADL.py" name="adl" ns="$(arg n_uav)" output="screen" >
+		<param name="acept_radio" value="$(arg acept_radio)" /> 
+		<param name="rgb_images_on" value="$(arg rgb_images_on)" /> 
+		<param name="thermal_images_on" value="$(arg thermal_images_on)" /> 
+  </node> 
+
+  <node pkg="inspector_software_uav" type="PAL.py" name="pal" ns="$(arg n_uav)" output="screen"/>
+
+  <!-- <node pkg="inspector_software_uav" type="battery_checker.py" name="battery_checker" ns="$(arg n_uav)" output="screen"/> -->
+
+  <!-- <node pkg="inspector_software_uav" type="vel_publisher.py" name="vel_publisher" ns="$(arg n_uav)" output="screen"/> -->
+ 
+
+
+  <node pkg="master_discovery_fkie" type="master_discovery" name="master_discovery" respawn="true" respawn_delay="5" />
+  
+  <!-- <node pkg="master_sync_fkie" type="master_sync" name="master_sync" respawn="true" respawn_delay="5" >
+    <rosparam subst_value="true">
+         - /public*
+        - /sim/clock -->
+      <!-- ignore_nodes:
+        - /dji_sdk
+        - /ual -->
+      <!-- ignore_services: -->
+      <!-- - /* -->
+        <!-- - /dji_sdk* -->
+        <!-- - /ual/take_off -->
+      <!-- sync_services: -->
+            <!-- - /stby_action_service
+        - /mission_service_0
+        - /paused_state_action_service
+        - /stop_service -->
+      <!-- resync_on_reconnect: $(arg resync_on_reconnect) -->
+    <!-- </rosparam>
+  </node>  -->
+
+ 
+</launch>

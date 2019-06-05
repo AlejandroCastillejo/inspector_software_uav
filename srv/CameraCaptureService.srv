@@ -3,6 +3,6 @@ bool OFF = False
 
 #request
 bool capture
-float32 interval
+float32 shooting_distance
 ---
 bool result
