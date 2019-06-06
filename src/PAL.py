@@ -3,6 +3,7 @@
 import rospy
 import rosbag
 
+import math
 import socket
 import ftplib
 import gphoto2 as gp
@@ -17,6 +18,7 @@ from scp import SCPClient
 
 from std_msgs.msg import Float64, Int32, Time
 from sensor_msgs.msg import Image, NavSatFix
+from geometry_msgs.msg import TwistStamped, QuaternionStamped
 from inspector_software_uav.srv import RecordBagService, CameraCaptureService, DownloadService, ConnectionService
 
 # GCS IP, user & password
@@ -42,12 +44,17 @@ class PAL:
         self.gps_record = False
         self.telemetry_save = False
         self.current_laser_altitude = 0.0
+        self.current_attitude = QuaternionStamped()
         self.thermal_camera_connected = False
+        self.telemetry_file_head = False
+
         
         # Desktop path
         self.desktop = os.path.expanduser("~/Desktop")
         # Webcam Bags directory
         self.mission_bags_dir = self.desktop +'/Mission_Bags/'
+        # Telemetry Bags directory
+        self.telemetry_bags_dir = self.desktop +'/Telemetry_Bags/'
         # RGB Images directory
         self.rgb_images_dir = self.desktop +'/RGB_Camera_Images/'
         # Thermal Images directory
@@ -55,11 +62,14 @@ class PAL:
         # Telemetry data directory
         self.telemetry_files_dir = self.desktop + '/Telemetry_Data/'
         
-        self.dir_list = ['/Mission_Bags/', '/RGB_Camera_Images/', '/Thermal_Camera_Images/', '/Telemetry_Data/']
+        self.dir_list = ['/Mission_Bags/', '/Telemetry_Bags/', '/RGB_Camera_Images/', '/Thermal_Camera_Images/', '/Telemetry_Data/']
 
         # In case a directory doesn't exist yet, then create it
         if not os.path.exists(self.mission_bags_dir):
             os.makedirs(self.mission_bags_dir)
+
+        if not os.path.exists(self.telemetry_bags_dir):
+            os.makedirs(self.telemetry_bags_dir)
 
         if not os.path.exists(self.rgb_images_dir):
             os.makedirs(self.rgb_images_dir)
@@ -73,7 +83,9 @@ class PAL:
     ## ROStopics Subscribers
         rospy.Subscriber('usb_cam/image_raw', Image, self.usb_cam_cb)
         rospy.Subscriber('dji_sdk/gps_position', NavSatFix, self.dji_gps_position_cb)
+        rospy.Subscriber('dji_sdk/attitude', QuaternionStamped, self.dji_attitude_cb)
         rospy.Subscriber('laser_altitude', Float64, self.laser_altitude_cb)
+        rospy.Subscriber('ual/velocity', TwistStamped, self.velocity_cb)
 
     ## ROSservices
         # Telemetry: DJI A3 autopilot GPS & Laser altimeter
@@ -82,6 +94,7 @@ class PAL:
 
         # Logitech Webcam
         webcam_bag_srv = rospy.Service('webcam_bag_service', RecordBagService, self.webcam_bag_service_cb)
+        # telemetry_bag_srv = rospy.Service('telemetry_bag_service', RecordBagService, self.telemetry_bag_service_cb)
         
         ## WIRIS thermal camera
         thermal_camera_connection_srv = rospy.Service('thermal_camera_connection_service', ConnectionService, self.thermal_camera_connection_service_cb)
@@ -107,8 +120,10 @@ class PAL:
             self.webcam_bag.write('rostime', rostime)
             self.webcam_bag.write('webcamImage', image_msg)
 
-    def dji_gps_position_cb(self, gps_msg):
+    def dji_attitude_cb(self, attitude_msg):
+        self.current_attitude = attitude_msg
 
+    def dji_gps_position_cb(self, gps_msg):
         if self.gps_record == True:
             rostime = Time()
             rostime.data = rospy.get_rostime()
@@ -116,9 +131,21 @@ class PAL:
             self.gpsA3_bag.write('geoPosition', gps_msg)
             
         if self.telemetry_save:
-            self.telemetry_file_writer.writerow({'Time':rospy.get_rostime(), 'Latitude':gps_msg.latitude, 'Longitude':gps_msg.longitude, 'Altitude':gps_msg.altitude, 'Laser_altitude':self.current_laser_altitude})
+            if not self.telemetry_file_head:
+                self.telemetry_file_writer.writerow({'Time': 'Time', 'Latitude':'Latitude', 'Longitude':'Longitude', 'Altitude':'Altitude', \
+                                                'Laser_altitude':'Laser_altitude', 'Quat.x':'Quat.x', \
+                                                'Quat.y':'Quat.y', 'Quat.z':'Quat.z', 'Quat.w':'Quat.w'})
+                self.telemetry_file_head = True
 
+            else:
+                self.telemetry_file_writer.writerow({'Time':rospy.get_rostime(), 'Latitude':gps_msg.latitude, 'Longitude':gps_msg.longitude, 'Altitude':gps_msg.altitude, \
+                                                'Laser_altitude':self.current_laser_altitude, 'Quat.x':self.current_attitude.quaternion.x, \
+                                                'Quat.y':self.current_attitude.quaternion.y, 'Quat.z':self.current_attitude.quaternion.z, 'Quat.w':self.current_attitude.quaternion.w})
 
+    def velocity_cb(self, data):
+        x_vel = data.twist.linear.x
+        y_vel = data.twist.linear.y
+        self.current_xy_vel = math.sqrt(x_vel**2 + y_vel**2)
 
     ## Services callbacks
 
@@ -126,7 +153,7 @@ class PAL:
         if req.record == True:
             self.telemetry_save = req.record
             telemetry_file = open(self.telemetry_files_dir + 'telemetry_{0}.csv'.format(self.mission_start_time.strftime("%Y-%m-%d %H:%M:%S")), 'a')
-            columns = ['Time', 'Latitude', 'Longitude', 'Altitude', 'Laser_altitude']
+            columns = ['Time', 'Latitude', 'Longitude', 'Altitude', 'Laser_altitude', 'Quat.x', 'Quat.y', 'Quat.z', 'Quat.w']
             self.telemetry_file_writer = csv.DictWriter(telemetry_file, fieldnames=columns)
             rospy.loginfo('PAL: Saving telemetry data')
             return True
@@ -175,7 +202,7 @@ class PAL:
                 return False
 
     def rgb_camera_capture_service_cb(self, req):
-        self.rgb_interval = req.interval
+        self.rgb_camera_shooting_distance = req.shooting_distance
         
         if req.capture == True:
             # if not hasattr(self, 'rgb_file'):
@@ -205,7 +232,7 @@ class PAL:
         while True:
             while self.rgb_capture == True:
                 print ('calling rgb camera capture function')
-                next_call = time.time() + self.rgb_interval
+                next_call = time.time() + self.rgb_camera_shooting_distance / min(self.current_xy_vel, 2.0)
                 self.rgb_camera_capture_function()
                 if (next_call - time.time()) > 0:
                     time.sleep(next_call - time.time())
@@ -264,7 +291,7 @@ class PAL:
     
 
     def thermal_camera_capture_service_cb(self, req):
-        self.thermal_camera_interval = req.interval
+        self.thermal_camera_shooting_distance = req.shooting_distance
 
         if self.thermal_camera_connected:
             if req.capture == True:
@@ -284,7 +311,8 @@ class PAL:
     def thermal_camera_capture_thread(self):
         while True:
             while self.thermal_camera_capture:
-                interval = self.thermal_camera_interval
+                # interval = self.thermal_camera_interval
+                interval = self.thermal_camera_shooting_distance / min(self.current_xy_vel, 2.0)
                 next_call = time.time() + interval
                 self.s.send('CIMG')
                 capt_resp = self.s.recv(3)

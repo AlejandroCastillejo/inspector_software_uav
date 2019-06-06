@@ -1,26 +1,24 @@
 <launch>
 
-  <arg name="n_uav" default="uav_2"/>
+  <arg name="n_uav" default="uav_1"/>
   <arg name="acept_radio" default="1.2"/>
-  <arg name="rgb_images_on" default="False"/>
-  <arg name="thermal_images_on" default="False"/>
-  <arg name="rgb_images_interval" default="10.0"/>
-  <arg name="thermal_images_interval" default="10.0"/>
+  <arg name="rgb_images_on" default="True"/>
+  <arg name="thermal_images_on" default="True"/>
   <arg name="resync_on_reconnect" default="$(optenv MULTIMASTER_RESYNC_ON_RECONNECT false)"/>
 
-  <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" ns="$(arg n_uav)" output="screen">
+  <!-- <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" ns="$(arg n_uav)" output="screen">
     <param name="video_device" value="/dev/video0" />
     <param name="image_width" value="640" />
     <param name="image_height" value="480" />
     <param name="pixel_format" value="yuyv" />
     <param name="camera_frame_id" value="usb_cam" />
     <param name="io_method" value="mmap"/>
-  </node>
+  </node> -->
 
- <node name="image_view" pkg="image_view" type="image_view" respawn="false" ns="$(arg n_uav)" output="screen">
+ <!-- <node name="image_view" pkg="image_view" type="image_view" respawn="false" ns="$(arg n_uav)" output="screen">
     <remap from="image" to="/$(arg n_uav)/usb_cam/image_raw"/>
     <param name="autosize" value="true" />
-  </node>
+  </node> -->
    
  <!-- <node name="image_view" pkg="image_view" type="image_view" respawn="false" ns="$(arg n_uav)" output="screen">
     <remap from="image" to="/$(arg n_uav)/usb_cam/image_raw"/>
@@ -46,21 +44,19 @@
       <!-- <param name="laser_altimeter" value="false"/> -->
       <param name="laser_altimeter" value="true"/>
       <param name="self_arming" value="true"/>
-      <param name="xy_vel_max" value="9.0"/>
+      <param name="xy_vel_max" value="3.5"/>
       
   </node> 
 
   <node pkg="inspector_software_uav" type="ADL.py" name="adl" ns="$(arg n_uav)" output="screen" >
-		<param name="acep_radio" value="$(arg acept_radio)" /> 
+		<param name="acept_radio" value="$(arg acept_radio)" /> 
 		<param name="rgb_images_on" value="$(arg rgb_images_on)" /> 
 		<param name="thermal_images_on" value="$(arg thermal_images_on)" /> 
-		<param name="rgb_images_interval" value="$(arg rgb_images_interval)" /> 
-		<param name="thermal_images_interval" value="$(arg thermal_images_interval)" /> 
   </node> 
 
   <node pkg="inspector_software_uav" type="PAL.py" name="pal" ns="$(arg n_uav)" output="screen"/>
 
-  <node pkg="inspector_software_uav" type="battery_checker.py" name="battery_checker" ns="$(arg n_uav)" output="screen"/>
+  <!-- <node pkg="inspector_software_uav" type="battery_checker.py" name="battery_checker" ns="$(arg n_uav)" output="screen"/> -->
 
   <!-- <node pkg="inspector_software_uav" type="vel_publisher.py" name="vel_publisher" ns="$(arg n_uav)" output="screen"/> -->
  

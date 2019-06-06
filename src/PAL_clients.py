@@ -16,6 +16,7 @@ def telemetry_data_client(record):
     except rospy.ServiceException, e:
         rospy.logerr('Service call failed: %s' %e)
         return False
+        
 
 def rgb_camera_connection_client():
     try:
@@ -27,11 +28,11 @@ def rgb_camera_connection_client():
         rospy.logerr('Service call failed: %s' %e)
         return False
 
-def rgb_camera_capture_client(capture, interval):
+def rgb_camera_capture_client(capture, shooting_dist):
     try:
         rospy.wait_for_service('rgb_camera_capture_service')
         rgb_camera_capture = rospy.ServiceProxy('rgb_camera_capture_service', CameraCaptureService)
-        resp = rgb_camera_capture(capture, interval)
+        resp = rgb_camera_capture(capture, shooting_dist)
         return resp.result
     except rospy.ServiceException, e:
         rospy.logerr('Service call failed: %s' %e)
@@ -47,11 +48,11 @@ def thermal_camera_connection_client():
         rospy.logerr('Service call failed: %s' %e)
         return False
 
-def thermal_camera_capture_client(capture, interval):
+def thermal_camera_capture_client(capture, shooting_dist):
     try:
         rospy.wait_for_service('thermal_camera_capture_service')
         thermal_camera_capture = rospy.ServiceProxy('thermal_camera_capture_service', CameraCaptureService)
-        resp = thermal_camera_capture(capture, interval)
+        resp = thermal_camera_capture(capture, shooting_dist)
         return resp.result
     except rospy.ServiceException, e:
         rospy.logerr('Service call failed: %s' %e)

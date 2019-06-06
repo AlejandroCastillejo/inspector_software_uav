@@ -31,20 +31,6 @@ current_pos = PointStamped()
 current_gps_pos = NavSatFix()
 current_state = UInt8()
 
-# fixed_yaw = 0.0
-
-## ROS params
-uav_id = rospy.get_param('uav_id', 1)
-acept_radio = rospy.get_param('acept_radio', 1.2)
-rgb_images_on = rospy.get_param('rgb_images_on', False)
-# rgb_images_on = rospy.get_param('uav_1/adl/rgb_images_on', True)
-thermal_images_on = rospy.get_param('thermal_images_on', False)
-rgb_images_interval = rospy.get_param('rgb_images_interval', 10.0)
-thermal_images_interval = rospy.get_param('thermal_images_interval', 10.0)
-
-print ('rgb_images_on', rgb_images_on)
-print ('type', type(rgb_images_on))
-
 ## Json files with mission information
 mission_status_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_status.json'
 mission_waypoints_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_wps.json'
@@ -56,7 +42,6 @@ print mission_waypoints_file
 
 # # Define PAL Clients object
 # pal = PALClients()
-
 
 
 
@@ -168,6 +153,10 @@ class Delay_State(smach.State):
     def execute(self,userdata):
 
         # Opening connection with cameras
+        print ('acept_radio', acept_radio)
+        print ('rgb_images_on', rgb_images_on)
+        print ('thermal_images_on', thermal_images_on)
+        
         if rgb_images_on:
             resp_rgb_connection = pal.rgb_camera_connection_client()
             if resp_rgb_connection:
@@ -217,8 +206,6 @@ class TakeOff_State(smach.State):
 
             while not(current_state == State.FLYING_AUTO):
             # while not(current_state == 4):
-                # print("from msg",State.FLYING_AUTO)
-                # print(current_state)
                 if stop_flag:    # Mission manually stopped or battery low
                     return 'stop_mission' 
                 # print 'taking off'
@@ -227,8 +214,7 @@ class TakeOff_State(smach.State):
             rospy.sleep(1)
             # takeOff_flag = True
             rospy.loginfo("Take Off finished")
-            # Define wp_00
-            userdata.wp_00 = copy.deepcopy(current_pos)
+            userdata.wp_00 = copy.deepcopy(current_pos)  # Define wp_00
             # print 'wp_00', userdata.wp_00
             return 'takeOff_finished'
         except rospy.ServiceException, e:
@@ -294,14 +280,19 @@ class GoToWp1_State(smach.State):
             return 'stop_mission'
 
         ## Starting captures
+        with open(mission_data_file) as f:
+            mission_data = json.load(f)
+            rgb_camera_shooting_distance = mission_data['rgb_camera_shooting_distance']
+            thermal_camera_shooting_distance = mission_data['thermal_camera_shooting_distance']
+
         if rgb_images_on:
-            resp_rgb_capture = pal.rgb_camera_capture_client(True, rgb_images_interval)
+            resp_rgb_capture = pal.rgb_camera_capture_client(True, rgb_camera_shooting_distance)
             if resp_rgb_capture:
                 rospy.loginfo('ADL: RGB Camera capturing')
             else:
                 rospy.logwarn("ADL: Can't connect with RGB Camera")
         if thermal_images_on:
-            resp_thermal_capture = pal.thermal_camera_capture_client(True, thermal_images_interval)
+            resp_thermal_capture = pal.thermal_camera_capture_client(True, thermal_camera_shooting_distance)
             if resp_thermal_capture:
                 rospy.loginfo('ADL: Thermal Camera capturing')
             else:
@@ -340,6 +331,7 @@ class Sweep_State(smach.State):
         status ={'paused_mission' : 'False'}
         with open(mission_status_file, 'w') as f:
             json.dump(status, f)
+        rospy.sleep(1)        
         return 'sweep_finished'
             
 # Go to h_d
@@ -351,13 +343,13 @@ class GoToHd_State(smach.State):
                 
         ## Stop captures
         if rgb_images_on:
-            resp_rgb_capture = pal.rgb_camera_capture_client(False, rgb_images_interval)
+            resp_rgb_capture = pal.rgb_camera_capture_client(False, 1.0)
             if resp_rgb_capture:
                 rospy.loginfo('ADL: RGB Camera capturing stopped')
             else:
                 rospy.logwarn("ADL: Can't connect with RGB Camera")
         if thermal_images_on:
-            resp_thermal_capture = pal.thermal_camera_capture_client(False, thermal_images_interval)
+            resp_thermal_capture = pal.thermal_camera_capture_client(False, 1.0)
             if resp_thermal_capture:
                 rospy.loginfo('ADL: Thermal Camera capturing stopped')
             else:
@@ -373,6 +365,7 @@ class GoToHd_State(smach.State):
         target_wp.pose.position.y = current_pos.point.y
         target_wp.pose.position.z = H_d
         goToWaypoint_function(self, target_wp, False, False)
+        rospy.sleep(1)
         return 'at_h_d'
 
 
@@ -399,6 +392,7 @@ class GoToWp00_State(smach.State):
         target_wp.pose.position.y = userdata.wp_00.point.y
         target_wp.pose.position.z = userdata.wp_00.point.z
         goToWaypoint_function(self, target_wp, False, True)
+        rospy.sleep(1)
         return 'at_WayPoint_00'
 
 # Land
@@ -407,7 +401,7 @@ class Land_State(smach.State):
         smach.State.__init__(self, outcomes=['landed'])
 
     def execute(self,userdata):
-
+        
         rospy.wait_for_service('ual/land')
         land_client = rospy.ServiceProxy ('ual/land', Land)
         resp = land_client(False)
@@ -477,10 +471,8 @@ class Pause_State(smach.State):
         def paused_st_action_service_cb(req):
             self.action = req.paused_action
             return PausedStActionServiceResponse(True)
-        # def paused_mission_server():
-        paused_st_action_srv = rospy.Service('paused_state_action_service', PausedStActionService, paused_st_action_service_cb)
 
-        # paused_st_action_srv = gcs_master.Service('paused_state_action_service', PausedStActionService, paused_st_action_service_cb)
+        paused_st_action_srv = rospy.Service('paused_state_action_service', PausedStActionService, paused_st_action_service_cb)
 
         while True:
             if self.action == 1:
@@ -585,8 +577,8 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
         else:
             velocity.twist.angular.z = max (-0.6, yaw - current_yaw)
             set_velocity_pub.publish(velocity)
-        print ('yaw: ', yaw)
-        print ('current_yaw', current_yaw)
+        # print ('yaw: ', yaw)
+        # print ('current_yaw', current_yaw)
 
     o_wp.pose.position = target_wp.pose.position
     go_to_waypoint_client(o_wp, False)
@@ -613,9 +605,23 @@ def paused_st_action_service_cb(req):
 def paused_mission_server():
     paused_st_action_srv = rospy.Service('paused_state_action_service', PausedStActionService, paused_st_action_service_cb)
 
+
+## 
 ## main
 def main():
-    rospy.init_node('ADL_state_machine')
+    rospy.init_node('adl')
+    ## ROS params
+    global acept_radio, rgb_images_on, thermal_images_on
+    # uav_id = rospy.get_param('uav_id', 1)
+    acept_radio = rospy.get_param(rospy.search_param('acept_radio'), 1.2)
+    rgb_images_on = rospy.get_param(rospy.search_param('rgb_images_on'), False)
+    thermal_images_on = rospy.get_param(rospy.search_param('thermal_images_on'), False)
+    # rgb_images_interval = rospy.get_param('rgb_images_interval', 10.0)
+    # thermal_images_interval = rospy.get_param('thermal_images_interval', 10.0)
+
+    print ('acept_radio', acept_radio)
+    print ('thermal_images_on', thermal_images_on)
+    print ('rgb_images_on', rgb_images_on)
 
     # Subscribe to dji gps position
     def global_pos_cb(pose):
@@ -742,9 +748,6 @@ def main():
     # Wait for ctrl-c to stop the application
     # rospy.spin()
     sis.stop()
-
-
-
 
 
 

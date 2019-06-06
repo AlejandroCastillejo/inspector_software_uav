@@ -13,7 +13,7 @@ def main():
 
     def dji_battery_cb(data):
         percentage = data.percentage
-        print ('battery percentage: ', percentage)
+        # print ('battery percentage: ', percentage)
         if percentage < 30.0:
             try:
                 resp = stop_client()
