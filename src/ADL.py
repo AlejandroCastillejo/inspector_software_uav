@@ -332,6 +332,8 @@ class Sweep_State(smach.State):
             if stop_flag:    # Mission manually stopped or battery low
                 wp = {"x": current_pos.point.x, "y" : current_pos.point.y, "z" : current_pos.point.z}
                 wayPoints_left_.insert(0, wp)
+                # goToWaypoint_function(self, current_wp, False, False)
+                # rospy.sleep(1)
                 return 'stop_mission'
             wayPoints_left_.pop(0)
             userdata.wayPoints_left = wayPoints_left_
