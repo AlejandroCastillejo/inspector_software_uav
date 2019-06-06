@@ -16,6 +16,7 @@ def telemetry_data_client(record):
     except rospy.ServiceException, e:
         rospy.logerr('Service call failed: %s' %e)
         return False
+        
 
 def rgb_camera_connection_client():
     try:

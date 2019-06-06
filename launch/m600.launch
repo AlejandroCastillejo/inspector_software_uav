@@ -1,6 +1,6 @@
 <launch>
 
-  <arg name="n_uav" default="uav_1"/>
+  <arg name="n_uav" default="uav_2"/>
   <arg name="acept_radio" default="1.2"/>
   <arg name="rgb_images_on" default="False"/>
   <arg name="thermal_images_on" default="False"/>
@@ -60,7 +60,7 @@
 
   <node pkg="inspector_software_uav" type="PAL.py" name="pal" ns="$(arg n_uav)" output="screen"/>
 
-  <!-- <node pkg="inspector_software_uav" type="battery_checker.py" name="battery_checker" ns="$(arg n_uav)" output="screen"/> -->
+  <node pkg="inspector_software_uav" type="battery_checker.py" name="battery_checker" ns="$(arg n_uav)" output="screen"/>
 
   <!-- <node pkg="inspector_software_uav" type="vel_publisher.py" name="vel_publisher" ns="$(arg n_uav)" output="screen"/> -->
  
