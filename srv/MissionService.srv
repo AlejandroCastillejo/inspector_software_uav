@@ -1,7 +1,9 @@
 # nav_msgs/Path MissionPath
 geographic_msgs/GeoPath MissionPath
 int32 h_d
+#flight_angle & orientation respect to the North direction
 float32 flight_angle
+float32 orientation  
 float32 thermal_camera_shooting_distance
 float32 rgb_camera_shooting_distance
 ---

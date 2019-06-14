@@ -4,6 +4,8 @@
   <arg name="acept_radio" default="1.2"/>
   <arg name="rgb_images_on" default="True"/>
   <arg name="thermal_images_on" default="True"/>
+  <!-- <arg name="rgb_images_on" default="False"/> -->
+  <!-- <arg name="thermal_images_on" default="False"/> -->
   <arg name="resync_on_reconnect" default="$(optenv MULTIMASTER_RESYNC_ON_RECONNECT false)"/>
 
   <!-- <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" ns="$(arg n_uav)" output="screen">
@@ -41,10 +43,12 @@
 
   <node pkg="uav_abstraction_layer" type="server" name="ual" ns="$(arg n_uav)" output="screen">
       <param name="backend" value="dji"/>
-      <!-- <param name="laser_altimeter" value="false"/> -->
-      <param name="laser_altimeter" value="true"/>
+      <param name="laser_altimeter" value="false"/>
+      <!-- <param name="laser_altimeter" value="true"/> -->
       <param name="self_arming" value="true"/>
       <param name="xy_vel_max" value="3.5"/>
+      <param name="z_vel_max_up" value="1.0"/>
+      <param name="z_vel_max_dn" value="1.0"/>
       
   </node> 
 

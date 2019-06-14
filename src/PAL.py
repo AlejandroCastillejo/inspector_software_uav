@@ -22,12 +22,16 @@ from geometry_msgs.msg import TwistStamped, QuaternionStamped
 from inspector_software_uav.srv import RecordBagService, CameraCaptureService, DownloadService, ConnectionService
 
 # GCS IP, user & password
-GCS_HOST = '192.168.1.190'
+# gcs_IP = rospy.get_param('gcs_ip', '192.168.1.102')
+GCS_HOST = '192.168.88.196'
+# GCS_HOST = gcs_IP
 GCS_USER = 'alejandro'
 GCS_PASSWORD = 'a1'
 
+# print ('gcs_ip_param: ', gcs_IP)
+
 # Thermal camera IP address, TCP port, user & password
-WIRIS_IP = '10.0.2.228'
+WIRIS_IP = '192.168.88.194'
 WIRIS_TCP_PORT = 2240
 WIRIS_USER = 'wiris'
 WIRIS_PASSWORD = ''
@@ -36,6 +40,7 @@ class PAL:
 
     def __init__(self):
         
+        rospy.loginfo('starting PAL...')
         # Mission start time
         self.mission_start_time = datetime.datetime.now()
 
@@ -47,6 +52,7 @@ class PAL:
         self.current_attitude = QuaternionStamped()
         self.thermal_camera_connected = False
         self.telemetry_file_head = False
+        self.current_xy_vel = 1.0
 
         
         # Desktop path
@@ -108,6 +114,10 @@ class PAL:
         ## Upload data to GCS
         data_upload_srv = rospy.Service('data_upload_service', DownloadService, self.data_upload_service_cb)
 
+        ## loginfo
+        rospy.loginfo('PAL running')
+
+
     ## Subscribers callbacks
 
     def laser_altitude_cb(self, data):
@@ -146,6 +156,8 @@ class PAL:
         x_vel = data.twist.linear.x
         y_vel = data.twist.linear.y
         self.current_xy_vel = math.sqrt(x_vel**2 + y_vel**2)
+        if self.current_xy_vel == 0.0:
+            self.current_xy_vel = 1
 
     ## Services callbacks
 
@@ -221,7 +233,7 @@ class PAL:
 
         elif req.capture == False:
             self.rgb_capture = False
-            time.sleep(req.interval)
+            time.sleep(2)
             if hasattr(self, 'rgb_file'):
                 print ('closing rgb_file')
                 self.rgb_file.close()
@@ -232,7 +244,7 @@ class PAL:
         while True:
             while self.rgb_capture == True:
                 print ('calling rgb camera capture function')
-                next_call = time.time() + self.rgb_camera_shooting_distance / min(self.current_xy_vel, 2.0)
+                next_call = time.time() + self.rgb_camera_shooting_distance / max(self.current_xy_vel, 2.0)
                 self.rgb_camera_capture_function()
                 if (next_call - time.time()) > 0:
                     time.sleep(next_call - time.time())
@@ -312,7 +324,7 @@ class PAL:
         while True:
             while self.thermal_camera_capture:
                 # interval = self.thermal_camera_interval
-                interval = self.thermal_camera_shooting_distance / min(self.current_xy_vel, 2.0)
+                interval = self.thermal_camera_shooting_distance / max(self.current_xy_vel, 2.0)
                 next_call = time.time() + interval
                 self.s.send('CIMG')
                 capt_resp = self.s.recv(3)
