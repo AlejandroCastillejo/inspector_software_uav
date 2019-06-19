@@ -12,7 +12,7 @@ import smach
 import smach_ros
 import time
 from std_msgs.msg import Float32, UInt8
-from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, TwistStamped
+from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, TwistStamped, Vector3Stamped
 from sensor_msgs.msg import NavSatFix
 
 from inspector_software_uav.srv import *
@@ -29,6 +29,7 @@ loaded_mission = False
 flight_status = UInt8
 current_pos = PointStamped()
 current_gps_pos = NavSatFix()
+current_vel = Vector3Stamped()
 current_state = UInt8()
 
 ## Json files with mission information
@@ -43,6 +44,10 @@ print mission_waypoints_file
 # # Define PAL Clients object
 # pal = PALClients()
 
+acept_radio = rospy.get_param('acept_radio', 1.2)
+rgb_images_on = rospy.get_param('rgb_images_on', False)
+thermal_images_on = rospy.get_param('thermal_images_on', False)
+stop_distance = rospy.get_param('stop_distance', 10)
 
 
 ####################
@@ -240,7 +245,7 @@ class GoToWp01_State(smach.State):
         target_wp.pose.position.y = mission['path'][0]['y']
         target_wp.pose.position.z = mission['h_d']
       
-        goToWaypoint_function(self, target_wp, True, False)
+        goToWaypoint_function(self, target_wp, True, True)
         if stop_flag:    # Mission manually stopped or battery low
             return 'stop_mission'
         rospy.loginfo('at wp 01')
@@ -277,7 +282,7 @@ class GoToWp1_State(smach.State):
         #     x_left = self.current_wp.point.x - target_wp.pose.position.x
         #     y_left = self.current_wp.point.y - target_wp.pose.position.y
         #     z_left = self.current_wp.point.z - target_wp.pose.position.z
-        goToWaypoint_function(self, target_wp, True, False)
+        goToWaypoint_function(self, target_wp, True, True)
         if stop_flag:    # Mission manually stopped or battery low
             return 'stop_mission'
 
@@ -357,6 +362,37 @@ class GoToHd_State(smach.State):
             else:
                 rospy.logwarn("ADL: Can't connect with Thermal Camera")
         ##
+        ## Stop UAV
+        rospy.loginfo("ADL: Stopping UAV")
+        # cmd_velocity = TwistStamped()
+        # x_vel = current_vel.twist.linear.x
+        # y_vel = current_vel.twist.linear.y
+        # xy_vel = math.sqrt(x_vel**2 + y_vel**2)
+        # t_xy_vel = xy_vel
+        # while t_xy_vel > 0:
+        #     cmd_velocity.twist.linear.x = x_vel * t_xy_vel/xy_vel
+        #     cmd_velocity.twist.linear.y = y_vel * t_xy_vel/xy_vel
+        #     set_velocity_pub.publish(cmd_velocity)
+        #     t_xy_vel -= 0.01
+        #     rospy.sleep(0.02)
+        # rospy.sleep(1)
+        ##
+        with open(mission_waypoints_file) as f:
+            mission = json.load(f)
+        current_wp = mission['path'][0]
+        next_wp = mission['path'][1]
+        x_ref = next_wp['x'] - current_wp['x']
+        y_ref = next_wp['y'] - current_wp['y']
+        r = math.sqrt(x_ref**2 + y_ref**2)
+        stop_wp = PoseStamped()
+        stop_wp.pose.position.x = current_wp['x'] + x_ref/r * min(stop_distance, r)
+        stop_wp.pose.position.y = current_wp['y'] + y_ref/r * min(stop_distance, r)
+        stop_wp.pose.position.z = current_pos.point.z
+        print('current_wp: ', current_wp)
+        print('stop_wp: ', stop_wp)
+        goToWaypoint_function(self, stop_wp, False, False)
+        rospy.sleep(1)
+        ##
 
         with open(mission_waypoints_file) as f:
             mission = json.load(f)
@@ -393,7 +429,7 @@ class GoToWp00_State(smach.State):
         target_wp.pose.position.x = userdata.wp_00.point.x
         target_wp.pose.position.y = userdata.wp_00.point.y
         target_wp.pose.position.z = userdata.wp_00.point.z
-        goToWaypoint_function(self, target_wp, False, False)
+        goToWaypoint_function(self, target_wp, False, True)
         rospy.sleep(1)
         return 'at_WayPoint_00'
 
@@ -538,6 +574,7 @@ def stop_mission_server():
 
 #Publisher
 set_velocity_pub = rospy.Publisher('ual/set_velocity', TwistStamped, queue_size=1)
+set_pose_pub = rospy.Publisher('ual/set_pose', PoseStamped, queue_size=1)
 
 
 ##GO TO WAYPOINT FUNCTION
@@ -554,12 +591,17 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
         # yaw = fixed_yaw
         with open(mission_data_file) as f:
             data = json.load(f)
-            yaw = math.pi/180*abs(data['flight_angle']-90)
-            # yaw = math.pi/180*abs(data['flight_angle']+90)
-            if yaw > math.pi:
-                yaw -= 2*math.pi
-            elif yaw <math.pi:
-                yaw += 2*math.pi
+            # orientation = data['flight_angle'] + 90
+            orientation = -data['flight_angle'] - 90 
+            if orientation > 180:
+                orientation -= 360
+            yaw = math.pi/180*orientation
+            # yaw = math.pi/180*abs(data['flight_angle']-90)
+            # # yaw = math.pi/180*abs(data['flight_angle']+90)
+            # if yaw > math.pi:
+            #     yaw -= 2*math.pi
+            # elif yaw <math.pi:
+            #     yaw += 2*math.pi
 
             # yaw = math.pi/180*data['orientation']
 
@@ -586,8 +628,8 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
         else:
             velocity.twist.angular.z = max (-0.6, yaw - current_yaw)
             set_velocity_pub.publish(velocity)
-        print ('yaw: ', yaw)
-        print ('current_yaw', current_yaw)
+        # print ('yaw: ', yaw)
+        # print ('current_yaw', current_yaw)
         rospy.sleep(0.1)
 
     o_wp.pose.position = target_wp.pose.position
@@ -599,6 +641,7 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
         x_left = current_pos.point.x - target_wp.pose.position.x 
         y_left = current_pos.point.y - target_wp.pose.position.y 
         z_left = current_pos.point.z - target_wp.pose.position.z
+
         if stop_flag and stop_on:   # Mission manually stopped or battery low
         # if stop_mission_server():
             # global stop_flag
@@ -623,11 +666,13 @@ def main():
     rospy.loginfo('starting ADL...')
 
     ## ROS params
-    global acept_radio, rgb_images_on, thermal_images_on
+    # global acept_radio, rgb_images_on, thermal_images_on
     # uav_id = rospy.get_param('uav_id', 1)
-    acept_radio = rospy.get_param(rospy.search_param('acept_radio'), 1.2)
-    rgb_images_on = rospy.get_param(rospy.search_param('rgb_images_on'), False)
-    thermal_images_on = rospy.get_param(rospy.search_param('thermal_images_on'), False)
+
+    # acept_radio = rospy.get_param(rospy.search_param('acept_radio'), 1.2)
+    # rgb_images_on = rospy.get_param(rospy.search_param('rgb_images_on'), False)
+    # thermal_images_on = rospy.get_param(rospy.search_param('thermal_images_on'), False)
+
     # rgb_images_interval = rospy.get_param('rgb_images_interval', 10.0)
     # thermal_images_interval = rospy.get_param('thermal_images_interval', 10.0)
 
@@ -658,6 +703,13 @@ def main():
         euler = euler_from_quaternion([q.x, q.y, q.z, q.w])
         current_yaw = euler[2]
     local_pos_subscriber = rospy.Subscriber("ual/pose", PoseStamped, local_pos_cb, queue_size=1)
+
+    # Subscribe to ual/velocity topic
+    def velocity_cb(velocity):
+        global current_vel
+        current_vel = velocity
+        rospy.sleep(0.05)
+    velocity_subscriber = rospy.Subscriber("ual/velocity", TwistStamped, velocity_cb, queue_size=1)
 
     # Subscribe to ual/state topic
     def ual_state_cb(state):

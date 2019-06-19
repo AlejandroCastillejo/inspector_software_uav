@@ -8,6 +8,7 @@
   <arg name="thermal_images_interval" default="10.0"/>
   <arg name="resync_on_reconnect" default="$(optenv MULTIMASTER_RESYNC_ON_RECONNECT false)"/>
 
+<!--
   <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" ns="$(arg n_uav)" output="screen">
     <param name="video_device" value="/dev/video0" />
     <param name="image_width" value="640" />
@@ -17,10 +18,11 @@
     <param name="io_method" value="mmap"/>
   </node>
 
- <node name="image_view" pkg="image_view" type="image_view" respawn="false" ns="$(arg n_uav)" output="screen">
+  <node name="image_view" pkg="image_view" type="image_view" respawn="false" ns="$(arg n_uav)" output="screen">
     <remap from="image" to="/$(arg n_uav)/usb_cam/image_raw"/>
     <param name="autosize" value="true" />
-  </node>
+  </node> 
+  -->
    
  <!-- <node name="image_view" pkg="image_view" type="image_view" respawn="false" ns="$(arg n_uav)" output="screen">
     <remap from="image" to="/$(arg n_uav)/usb_cam/image_raw"/>
@@ -33,7 +35,8 @@
 
   <include file="$(find dji_sdk)/launch/sdk.launch" ns="$(arg n_uav)" />
 
-  <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch" ns="$(arg n_uav)"/>
+  <!-- <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch" ns="$(arg n_uav)"/> -->
+  
   <!-- <include file="$(find sf11_altitude_sensor)/launch/altitude_node.launch" /> -->
   
   <!-- <node   pkg="sf11_altitude_sensor" name="altitude_sensor" type="altitude_sensor_node" ns="$(arg n_uav)" output="screen" >
@@ -43,10 +46,12 @@
 
   <node pkg="uav_abstraction_layer" type="server" name="ual" ns="$(arg n_uav)" output="screen">
       <param name="backend" value="dji"/>
-      <!-- <param name="laser_altimeter" value="false"/> -->
-      <param name="laser_altimeter" value="true"/>
+      <param name="laser_altimeter" value="false"/>
+      <!-- <param name="laser_altimeter" value="true"/> -->
       <param name="self_arming" value="true"/>
-      <param name="xy_vel_max" value="9.0"/>
+      <param name="xy_vel_max" value="2.2"/>
+      <param name="z_vel_max_up" value="1.0"/>
+      <param name="z_vel_max_dn" value="1.0"/>
       
   </node> 
 

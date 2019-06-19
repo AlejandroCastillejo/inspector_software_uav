@@ -219,7 +219,7 @@ class PAL:
         if req.capture == True:
             # if not hasattr(self, 'rgb_file'):
             print ('opening rgb_file')
-            self.rgb_file = open(self.rgb_images_dir + 'rbg_images_{0}.csv'.format(self.mission_start_time.strftime("%Y-%m-%d %H:%M:%S")), 'a')
+            self.rgb_file = open(self.rgb_images_dir + 'rgb_images_{0}.csv'.format(self.mission_start_time.strftime("%Y-%m-%d %H:%M:%S")), 'a')
             columns = ['RGB Image', 'Time']
             self.rgb_file_writer = csv.DictWriter(self.rgb_file, fieldnames=columns)                   
 
