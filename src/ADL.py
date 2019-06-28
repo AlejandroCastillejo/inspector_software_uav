@@ -11,7 +11,8 @@ import rospy
 import smach
 import smach_ros
 import time
-from std_msgs.msg import Float32, UInt8
+import threading
+from std_msgs.msg import Float32, UInt8, String
 from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, TwistStamped, Vector3Stamped
 from sensor_msgs.msg import NavSatFix
 
@@ -26,11 +27,12 @@ import geo
 stop_flag = False
 auto_download = False
 loaded_mission = False
-flight_status = UInt8
+flight_status = UInt8()
 current_pos = PointStamped()
 current_gps_pos = NavSatFix()
 current_vel = Vector3Stamped()
 current_state = UInt8()
+adl_state = String()
 
 ## Json files with mission information
 mission_status_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_status.json'
@@ -61,6 +63,8 @@ class Standby_State(smach.State):
         self.start = False
     
     def execute(self, userdata):
+        global adl_state
+        adl_state = 'Standby'
         with open(mission_status_file) as f:
         # with open('mission_status.json') as f:
             status = json.load(f)
@@ -188,6 +192,8 @@ class TakeOff_State(smach.State):
         #self.end = False
 
     def execute(self, userdata):
+        global adl_state
+        adl_state = 'Taking Off'
         with open(mission_waypoints_file) as f:
             mission = json.load(f)
         H_d = mission['h_d']
@@ -235,7 +241,8 @@ class GoToWp01_State(smach.State):
         smach.State.__init__(self, outcomes=['at_WayPoint_01','stop_mission'])
 
     def execute(self,userdata):
-
+        global adl_state
+        adl_state = 'Going to fist WP'
         rospy.loginfo('ADL: Mission status: Positioning... flying on safe height')
         # while True:
         with open(mission_waypoints_file) as f:
@@ -259,6 +266,8 @@ class GoToWp1_State(smach.State):
         smach.State.__init__(self, outcomes=['at_WayPoint_1','stop_mission'])
 
     def execute(self,userdata):
+        global adl_state
+        adl_state = 'Going to fist WP'
         rospy.loginfo('ADL: Mission status: Possitioning... going to sweep height')
         with open(mission_waypoints_file) as f:
             mission = json.load(f)
@@ -315,6 +324,8 @@ class Sweep_State(smach.State):
         smach.State.__init__(self, outcomes=['sweep_finished','stop_mission'], input_keys=[], output_keys=['wayPoints_left'])
 
     def execute(self,userdata):
+        global adl_state
+        adl_state = 'Sweep running'
         rospy.loginfo('ADL: Mission status: Sweep')
         with open(mission_waypoints_file) as f:
             mission = json.load(f)
@@ -347,7 +358,8 @@ class GoToHd_State(smach.State):
         smach.State.__init__(self, outcomes=['at_h_d'])
 
     def execute(self,userdata):
-                
+        global adl_state
+        adl_state = 'Going back home'
         ## Stop captures
         if rgb_images_on:
             resp_rgb_capture = pal.rgb_camera_capture_client(False, 1.0)
@@ -413,7 +425,8 @@ class GoToWp00_State(smach.State):
         smach.State.__init__(self, outcomes=['at_WayPoint_00'], input_keys=['wp_00'])
 
     def execute(self,userdata):
-
+        global adl_state
+        adl_state = 'Going back home'
         ## Downloading thermal images
         if thermal_images_on:
             resp_thermal_images_download = pal.thermal_camera_download_client()
@@ -439,7 +452,8 @@ class Land_State(smach.State):
         smach.State.__init__(self, outcomes=['landed'])
 
     def execute(self,userdata):
-        
+        global adl_state
+        adl_state = 'Landing'
         rospy.wait_for_service('ual/land')
         land_client = rospy.ServiceProxy ('ual/land', Land)
         resp = land_client(False)
@@ -458,6 +472,8 @@ class Landed_State(smach.State):
         smach.State.__init__(self, outcomes=['auto_download_on','auto_download_off','mission_paused'])
 
     def execute(self,userdata):
+        global adl_state
+        adl_state = 'Landed'
         rospy.loginfo('ADL: Mission status: Landed')
         
         ## Stop recording telemetry data
@@ -503,6 +519,8 @@ class Pause_State(smach.State):
         smach.State.__init__(self, outcomes=['resume','cancel_mission'])
 
     def execute(self,userdata):
+        global adl_state
+        adl_state = 'Paused mission'
         rospy.loginfo('ADL: Mission Status: PAUSED. Waiing to receive resume or cancel order')
         self.action = 0
 
@@ -679,6 +697,9 @@ def main():
     print ('acept_radio', acept_radio)
     print ('thermal_images_on', thermal_images_on)
     print ('rgb_images_on', rgb_images_on)
+    
+    # Define ADL State publisher
+    adl_state_pub = rospy.Publisher('adl_state', String, queue_size=10)
 
     # Subscribe to dji gps position
     def global_pos_cb(pose):
@@ -735,6 +756,13 @@ def main():
     sm = smach.StateMachine(outcomes=[])#'outcome4', 'outcome5'])
     # sm.userdata.wp_00 = PointStamped()
 
+    # Thread
+    def main_thread():
+        while not rospy.is_shutdown():
+            adl_state_pub.publish(adl_state)
+            rospy.sleep(0.5)
+    t = threading.Thread(target=main_thread)
+    t.start()
 
     # Open the container
     with sm:
@@ -799,8 +827,7 @@ def main():
 
         ## loginfo
         rospy.loginfo('ADL running')
-
-        
+      
 
     # Create and start the introspection server
     sis = smach_ros.IntrospectionServer('my_smach_introspection_server', sm, '/SM_ROOT')
