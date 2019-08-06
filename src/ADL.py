@@ -35,9 +35,9 @@ current_state = UInt8()
 adl_state = String()
 
 ## Json files with mission information
-mission_status_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_status.json'
-mission_waypoints_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_wps.json'
-mission_data_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/src/mission_data.json'
+mission_status_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/json_files/mission_status.json'
+mission_waypoints_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/json_files/mission_wps.json'
+mission_data_file = os.path.expanduser("~") + '/catkin_ws/src/inspector_software_uav/json_files/mission_data.json'
 
 print mission_waypoints_file
 
@@ -46,10 +46,11 @@ print mission_waypoints_file
 # # Define PAL Clients object
 # pal = PALClients()
 
-acept_radio = rospy.get_param('acept_radio', 1.2)
-rgb_images_on = rospy.get_param('rgb_images_on', False)
-thermal_images_on = rospy.get_param('thermal_images_on', False)
-stop_distance = rospy.get_param('stop_distance', 10)
+# uav_id = rospy.get_param('~uav_id', 'uav_1')
+# acept_radio = rospy.get_param('~acept_radio', 1.2)
+# rgb_images_on = rospy.get_param('~rgb_images_on', False)
+# thermal_images_on = rospy.get_param('~thermal_images_on', False)
+# stop_distance = rospy.get_param('~stop_distance', 10)
 
 
 ####################
@@ -65,15 +66,23 @@ class Standby_State(smach.State):
     def execute(self, userdata):
         global adl_state
         adl_state = 'Standby'
+        # register uav_id in gcs
+        print ('waiting for uav_link service...')
+        rospy.wait_for_service('/uav_link_service')
+        try:
+            rospy.loginfo('uav: %s calling uav_link_service', uav_id)
+            uav_link_client = rospy.ServiceProxy('/uav_link_service', uavLink)
+            resp = uav_link_client(uav_id)
+        except rospy.ServiceException, e:
+            rospy.loginfo("uav_link_service call failed: %s"%e)
+
         with open(mission_status_file) as f:
-        # with open('mission_status.json') as f:
             status = json.load(f)
             paused_mission = status['paused_mission']
         if(paused_mission == 'True'):
             return 'to_paused_state'
         else:
             rospy.loginfo('ADL: UAV Ready. Waiting to receive order')
-            self.stby_flag = False
             # global loaded_mission
             # loaded_mission = False
             self.action = 0
@@ -127,15 +136,12 @@ class Standby_State(smach.State):
                 return StbyActionServiceResponse(True)
            
             stby_action_srv = rospy.Service('stby_action_service', StbyActionService, stby_action_service_cb)
-            # mission_srv = rospy.Service('mission_service_' + str(uav_id), MissionService, mission_service_cb)
             mission_srv = rospy.Service('mission_service', MissionService, mission_service_cb)
-            # while not self.stby_flag:
             while True:
                 if self.action == 1:
                     # if loaded_mission:
                     if True:  ##test
                         #userdata.H_d = self.H_d
-                        # self.stby_flag = True
                         stby_action_srv.shutdown()
                         mission_srv.shutdown()
                         status ={'paused_mission' : 'False'}
@@ -146,7 +152,6 @@ class Standby_State(smach.State):
                         rospy.loginfo('ADL: No mission available. Please load mission path')
                         self.action = 0
                 elif self.action == 2:
-                    # self.stby_flag = True
                     stby_action_srv.shutdown()
                     mission_srv.shutdown()
                     return 'download_files'
@@ -218,21 +223,18 @@ class TakeOff_State(smach.State):
                 rospy.loginfo('ADL: Take Off Failed')
 
             while not(current_state == State.FLYING_AUTO):
-            # while not(current_state == 4):
                 if stop_flag:    # Mission manually stopped or battery low
+                    rospy.loginfo('ADL: Mission stopped... Waiting for take Off to be finished')
+                    while not(current_state == State.FLYING_AUTO):
+                        rospy.sleep(1)
                     return 'stop_mission' 
-                # print 'taking off'
                 rospy.sleep(0.1)
-            # height_subscriber.unregister()
             rospy.sleep(1)
-            # takeOff_flag = True
             rospy.loginfo("Take Off finished")
             userdata.wp_00 = copy.deepcopy(current_pos)  # Define wp_00
-            # print 'wp_00', userdata.wp_00
             return 'takeOff_finished'
         except rospy.ServiceException, e:
             print "Service call failed: %s"%e
-        # print "trying to call service in 5s"
         # rospy.sleep(5)
 
 # Go to wp_01 (First wp latitude and longitude but positioning height)
@@ -244,7 +246,7 @@ class GoToWp01_State(smach.State):
         global adl_state
         adl_state = 'Going to fist WP'
         rospy.loginfo('ADL: Mission status: Positioning... flying on safe height')
-        # while True:
+
         with open(mission_waypoints_file) as f:
             mission = json.load(f)
         target_wp = PoseStamped()
@@ -275,22 +277,7 @@ class GoToWp1_State(smach.State):
         target_wp.pose.position.x = mission['path'][0]['x']
         target_wp.pose.position.y = mission['path'][0]['y']
         target_wp.pose.position.z = mission['path'][0]['z']
-        # print target_wp
-        # rospy.wait_for_service('ual/go_to_waypoint')
-        # go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
-        # resp = go_to_waypoint_client(target_wp, False)
-        # self.current_wp = PointStamped()
-        # def local_pos_cb(current_wp):
-        #         self.current_wp = current_wp
-        #         rospy.sleep(0.1)
-        # local_pos_subscriber = rospy.Subscriber("dji_sdk/local_position", PointStamped, local_pos_cb, queue_size = 1)
-        # x_left, y_left, z_left = 1, 1, 1
-        # while math.sqrt(x_left**2 + y_left**2) > 0.1 and abs(z_left) >0.1:
-        #     if stop_flag: 
-        #         return 'stop_mission' # Mission manually stopped or battery low
-        #     x_left = self.current_wp.point.x - target_wp.pose.position.x
-        #     y_left = self.current_wp.point.y - target_wp.pose.position.y
-        #     z_left = self.current_wp.point.z - target_wp.pose.position.z
+
         goToWaypoint_function(self, target_wp, True, True)
         if stop_flag:    # Mission manually stopped or battery low
             return 'stop_mission'
@@ -373,22 +360,10 @@ class GoToHd_State(smach.State):
                 rospy.loginfo('ADL: Thermal Camera capturing stopped')
             else:
                 rospy.logwarn("ADL: Can't connect with Thermal Camera")
-        ##
+    
         ## Stop UAV
         rospy.loginfo("ADL: Stopping UAV")
-        # cmd_velocity = TwistStamped()
-        # x_vel = current_vel.twist.linear.x
-        # y_vel = current_vel.twist.linear.y
-        # xy_vel = math.sqrt(x_vel**2 + y_vel**2)
-        # t_xy_vel = xy_vel
-        # while t_xy_vel > 0:
-        #     cmd_velocity.twist.linear.x = x_vel * t_xy_vel/xy_vel
-        #     cmd_velocity.twist.linear.y = y_vel * t_xy_vel/xy_vel
-        #     set_velocity_pub.publish(cmd_velocity)
-        #     t_xy_vel -= 0.01
-        #     rospy.sleep(0.02)
-        # rospy.sleep(1)
-        ##
+
         with open(mission_waypoints_file) as f:
             mission = json.load(f)
         current_wp = mission['path'][0]
@@ -566,15 +541,6 @@ class FilesDownload_State(smach.State):
         rospy.loginfo('ADL: Downloading')
         # topic goToWaypoint ...
 
-# # 
-# class (smach.State):
-#     def __init__(self):
-#         smach.State.__init__(self, outcomes=[''])
-
-#     def execute(self,userdata):
-#         rospy.loginfo('ADL: Mission status: Sweep')
-#         # topic goToWaypoint ...
-
 
 ## STOP MISSION SERVER
 def stop_mission_cb(req):
@@ -587,7 +553,6 @@ def stop_mission_cb(req):
 
 def stop_mission_server():
     stop_srv = rospy.Service('stop_service', StopService, stop_mission_cb)
-    # stop_srv = gcs_master.Service('stop_service', StopService, stop_mission_cb)
 
 
 #Publisher
@@ -605,8 +570,6 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
     if heading_on and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
         yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
     else:
-        # yaw = current_yaw
-        # yaw = fixed_yaw
         with open(mission_data_file) as f:
             data = json.load(f)
             # orientation = data['flight_angle'] + 90
@@ -614,19 +577,8 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
             if orientation > 180:
                 orientation -= 360
             yaw = math.pi/180*orientation
-            # yaw = math.pi/180*abs(data['flight_angle']-90)
-            # # yaw = math.pi/180*abs(data['flight_angle']+90)
-            # if yaw > math.pi:
-            #     yaw -= 2*math.pi
-            # elif yaw <math.pi:
-            #     yaw += 2*math.pi
-
-            # yaw = math.pi/180*data['orientation']
-
-    # print 'yaw', yaw
-    # print 'current_yaw', current_yaw
+            
     quat = quaternion_from_euler(0, 0, yaw)
-    # print 'quaternion', quat
 
     o_wp = PoseStamped()
     o_wp.pose.position = current_pos.point
@@ -634,9 +586,6 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
     o_wp.pose.orientation.y = quat[1]
     o_wp.pose.orientation.z = quat[2]
     o_wp.pose.orientation.w = quat[3]
-    print o_wp
-    # go_to_waypoint_client(o_wp, False)
-    # rospy.sleep(3)
 
     velocity = TwistStamped()
     while abs(yaw - current_yaw) > 0.01 :
@@ -654,19 +603,12 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
     go_to_waypoint_client(o_wp, False)
     x_left, y_left, z_left = 1, 1, 1
     while math.sqrt(x_left**2 + y_left**2) > acept_radio or abs(z_left) > 0.5:
-        # print '\n going to wp', target_wp.pose.position
-        # print 'currrent', current_pos.point
         x_left = current_pos.point.x - target_wp.pose.position.x 
         y_left = current_pos.point.y - target_wp.pose.position.y 
         z_left = current_pos.point.z - target_wp.pose.position.z
 
-        if stop_flag and stop_on:   # Mission manually stopped or battery low
-        # if stop_mission_server():
-            # global stop_flag
-            # stop_flag = False
-            # return 'stop_mission' 
+        if stop_flag and stop_on:   # Mission manually stopped or battery low 
             return
-        # print 'stop_srv', stop_srv
         rospy.sleep(0.1)
     print 'at wp', target_wp.pose.position
     
@@ -684,7 +626,13 @@ def main():
     rospy.loginfo('starting ADL...')
 
     ## ROS params
-    # global acept_radio, rgb_images_on, thermal_images_on
+    global uav_id, acept_radio, rgb_images_on, thermal_images_on
+    uav_id = rospy.get_param('~uav_id', 'uav_1')
+    acept_radio = rospy.get_param('acept_radio', 1.2)
+    rgb_images_on = rospy.get_param('~rgb_images_on', False)
+    thermal_images_on = rospy.get_param('~thermal_images_on', False)
+    stop_distance = rospy.get_param('~stop_distance', 10)
+
     # uav_id = rospy.get_param('uav_id', 1)
 
     # acept_radio = rospy.get_param(rospy.search_param('acept_radio'), 1.2)
@@ -694,6 +642,7 @@ def main():
     # rgb_images_interval = rospy.get_param('rgb_images_interval', 10.0)
     # thermal_images_interval = rospy.get_param('thermal_images_interval', 10.0)
 
+    print ('uav_id', uav_id)
     print ('acept_radio', acept_radio)
     print ('thermal_images_on', thermal_images_on)
     print ('rgb_images_on', rgb_images_on)
@@ -706,13 +655,6 @@ def main():
         global current_gps_pos
         current_gps_pos = pose
     global_pos_subscriber =rospy.Subscriber("dji_sdk/gps_position", NavSatFix, global_pos_cb, queue_size=1)
-
-    # # Subscribe to local possiontion topic
-    # def local_pos_cb(_current_pos):
-    #     global current_pos
-    #     current_pos = _current_pos
-    #     rospy.sleep(0.05)
-    # local_pos_subscriber = rospy.Subscriber("dji_sdk/local_position", PointStamped, local_pos_cb, queue_size = 1)
    
     # Subscribe to ual/pose topic
     def local_pos_cb(pose):
@@ -736,25 +678,17 @@ def main():
     def ual_state_cb(state):
         global current_state
         current_state = state.state
-        # rospy.loginfo('ADL: ual state: %s' %(current_state) )
     ual_state_subscriber = rospy.Subscriber("ual/state", State, ual_state_cb, queue_size=1)
     
-    # # Subscribe to height topic
-    # def height_cb(height):
-    #     global current_height
-    #     current_height = height.data
-    #     rospy.sleep(0.1)
-    # height_subscriber = rospy.Subscriber("dji_sdk/height_above_takeoff", Float32, height_cb, queue_size = 1)
-
-    #Subscribe to flight status topic
+    # Subscribe to flight status topic
     def flight_status_cb(status):
         global flight_status
         flight_status = status.data
         rospy.sleep(0.1)
     flight_status_subscriber = rospy.Subscriber("dji_sdk/flight_status", UInt8, flight_status_cb, queue_size=1)
+    
     # Create a SMACH state machine
     sm = smach.StateMachine(outcomes=[])#'outcome4', 'outcome5'])
-    # sm.userdata.wp_00 = PointStamped()
 
     # Thread
     def main_thread():
@@ -777,7 +711,6 @@ def main():
 
         # Open the container
         with sm_mission:
-
             # Add states
             smach.StateMachine.add('DELAY', Delay_State(), transitions={'end_delay':'TAKE_OFF','stop_mission':'LANDED'})
             smach.StateMachine.add('TAKE_OFF', TakeOff_State(), transitions={'takeOff_finished':'GO_TO_WP_01','stop_mission':'LAND'}, remapping = {'wp_00':'wp_00'})
@@ -789,8 +722,6 @@ def main():
             smach.StateMachine.add('GO_TO_WP_00', GoToWp00_State(), transitions={'at_WayPoint_00':'LAND'}, remapping = {'wp_00':'wp_00'})
             smach.StateMachine.add('LAND', Land_State(), transitions={'landed':'LANDED'})            
             smach.StateMachine.add('LANDED', Landed_State(), transitions={'auto_download_on':'download_files','auto_download_off':'end_without_downloading','mission_paused':'mission_paused'})
-
-            
             # smach.StateMachine.add('', (), transitions={'':''})
 
         smach.StateMachine.add('MISSION',sm_mission, 
@@ -798,27 +729,12 @@ def main():
                                 remapping = {'H_d' : 'H_d', 'wayPoints_left' : 'wayPoints_left'})
 
         # ## Create sub state machine for Pause Mission
-        # sm_pause_mission = smach.StateMachine(outcomes=['mission_paused','battery_low'])
-
-        # with sm_pause_mission:
-
-        #     smach.StateMachine.add('SAVE_CURRENT_POSITION',SaveCurrentPosition(),transitions={'current_position_saved':'GO_TO_H_d'})
-        #     smach.StateMachine.add('GO_TO_H_d', GoToHd(), transitions={'at_h_d':'GO_TO_WP_00'})
-        #     smach.StateMachine.add('GO_TO_WP_00', GoToWp00(), transitions={'at_WayPoint_00':'LAND'})
-        #     smach.StateMachine.add('LAND', Land(), transitions={'landed':'LANDED'})
-        #     smach.StateMachine.add('LANDED', Landed2(), transitions={'_mission_paused':'mission_paused','_battery_low':'battery_low'})
-
-        # smach.StateMachine.add('MISSION_PAUSED',sm_pause_mission, transitions={'mission_paused':'PAUSE_STATE','battery_low':'BATTERY_CHANGING'})
-
-        # smach.StateMachine.add('BATTERY_CHANGING', BatteryChanging(), transitions={'battery_changed':'PAUSE_STATE'})
         smach.StateMachine.add('PAUSE_STATE', Pause_State(), transitions={'resume':'MISSION','cancel_mission':'STANDBY'})
-
 
         # Create sub state machine for Files Downloading
         sm_files_downloading = smach.StateMachine(outcomes=['download_finished'])
 
         with sm_files_downloading:
-
             # Add states
             smach.StateMachine.add('WAITING_FOR_CONNECTION', WaitingForConnection_State(), transitions={'connection_successful':'DOWNLOAD'})
             smach.StateMachine.add('DOWNLOAD', FilesDownload_State(), transitions={'download_finished':'download_finished'})

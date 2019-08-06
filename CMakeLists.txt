@@ -68,6 +68,7 @@ find_package(catkin REQUIRED COMPONENTS
    ConnectionService.srv
    CameraCaptureService.srv
    DownloadService.srv
+   uavLink.srv
  )
 
 ## Generate actions in the 'action' folder

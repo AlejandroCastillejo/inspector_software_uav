@@ -21,14 +21,12 @@ from sensor_msgs.msg import Image, NavSatFix
 from geometry_msgs.msg import TwistStamped, QuaternionStamped
 from inspector_software_uav.srv import RecordBagService, CameraCaptureService, DownloadService, ConnectionService
 
-# GCS IP, user & password
+## GCS IP, user & password
 # gcs_IP = rospy.get_param('gcs_ip', '192.168.1.102')
 GCS_HOST = '192.168.88.196'
 # GCS_HOST = gcs_IP
-GCS_USER = 'alejandro'
-GCS_PASSWORD = 'a1'
-
-# print ('gcs_ip_param: ', gcs_IP)
+GCS_USER = 'user'
+GCS_PASSWORD = 'password'
 
 # Thermal camera IP address, TCP port, user & password
 WIRIS_IP = '192.168.88.194'
@@ -159,6 +157,7 @@ class PAL:
         if self.current_xy_vel == 0.0:
             self.current_xy_vel = 1
 
+
     ## Services callbacks
 
     def telemetry_data_service_cb(self, req):
@@ -200,7 +199,9 @@ class PAL:
             self.gpsA3_bag.close()  
         return True
 
+    
     ## RGB Camera
+
     def rgb_camera_connection_service_cb(self, req):
         if not hasattr(self, 'rgb_camera'):
             try:
@@ -213,11 +214,11 @@ class PAL:
                 rospy.logerr("PAL: RGB camera connection failed")
                 return False
 
+
     def rgb_camera_capture_service_cb(self, req):
         self.rgb_camera_shooting_distance = req.shooting_distance
         
         if req.capture == True:
-            # if not hasattr(self, 'rgb_file'):
             print ('opening rgb_file')
             self.rgb_file = open(self.rgb_images_dir + 'rgb_images_{0}.csv'.format(self.mission_start_time.strftime("%Y-%m-%d %H:%M:%S")), 'a')
             columns = ['RGB Image', 'Time']
@@ -252,20 +253,11 @@ class PAL:
                     rospy.logwarn('PAL: RGB Capture time exceeded interval in %f seconds', abs((next_call - time.time())))
             time.sleep(0.1)
             
-                # gp.check_result(gp.gp_camera_exit(self.rgb_camera))  
-                # rospy.loginfo('PAL: exit camera RGB Camera')              
-        # rgb_file.close()
-            
-        # gp.check_result(gp.gp_camera_exit(self.rgb_camera))  
-        # rospy.loginfo('PAL: exit RGB camera capture thread')
-        # sys.exit()
-
     def rgb_camera_capture_function(self):
         try:
             time_now = datetime.datetime.now()
             print('Capturing image')
             file_path = gp.check_result(gp.gp_camera_capture(self.rgb_camera, gp.GP_CAPTURE_IMAGE))
-            # print('Camera file path: {0}/{1}'.format(file_path.folder, file_path.name))
             filename = 'image_{0}.jpg'.format(time_now.strftime("%Y-%m-%d %H:%M:%S"))
             target = os.path.join(self.rgb_images_dir, filename)
             print('Copying image to', target)
@@ -323,7 +315,6 @@ class PAL:
     def thermal_camera_capture_thread(self):
         while True:
             while self.thermal_camera_capture:
-                # interval = self.thermal_camera_interval
                 interval = self.thermal_camera_shooting_distance / max(self.current_xy_vel, 2.0)
                 next_call = time.time() + interval
                 self.s.send('CIMG')
@@ -340,10 +331,11 @@ class PAL:
             time.sleep(0.1)
         # sys.exit()
 
+
     ## Thermal images download 
+
     def thermal_camera_download_service_cb(self, req):
         try:
-            # self.thermal_images_download()
             self.thermal_images_download_thread = threading.Thread(target=self.thermal_images_download_thread)
             self.thermal_images_download_thread.start()
             return True
@@ -351,11 +343,7 @@ class PAL:
             rospy.logerr("PAL: Can't download files from thermal camera or files can't be deleted")
             rospy.logerr(e)
             return False
-        # self.thermal_images_download()
-        # return True
     
-    # def thermal_images_download(self):
-
     def thermal_images_download_thread(self):
         ftp = ftplib.FTP(WIRIS_IP)
         ftp.login(WIRIS_USER, WIRIS_PASSWORD)
@@ -383,7 +371,6 @@ class PAL:
                 img_dir = directory + '/img/'
                 filenames = ftp.nlst(img_dir)
                 for filename in filenames:
-                    # local_filename = os.path.join(self.thermal_images_dir, filename)
                     local_filename = self.thermal_images_dir + filename
                     f = open(local_filename, 'wb')
                     ftp.retrbinary('RETR '+ img_dir + filename, f.write)
@@ -418,25 +405,13 @@ class PAL:
             ssh.connect(GCS_HOST, username=GCS_USER, password=GCS_PASSWORD)
         except paramiko.SSHException as error:
             print error
-    
-        # scp = SCPClient(ssh.get_transport())
-    
-        # scp.put(self.telemetry_files_dir + 'telemetry_2019-03-26 14:28:06.csv', '~/Desktop')
-        # scp.putfo(str(self.telemetry_files_dir), '~/Desktop')
-        
+          
         target_dir = '~/Desktop/Mission_' + str(self.mission_start_time.strftime("%Y-%m-%d_%H:%M"))
         print target_dir
-        # target_dir = "~/Desktop/Mission_{}".format(self.mission_start_time.strftime("%Y-%m-%d %H:%M:%S"))
         ssh.exec_command('mkdir -p ' + target_dir)
         for dir_ in self.dir_list:
-
             os.system("sshpass -p '{}' scp -r {}/ {}@{}:{}".format(GCS_PASSWORD, self.desktop + dir_, GCS_USER, GCS_HOST, target_dir))
 
-            # os.system("sshpass -p '{}' scp -r {} {}@{}:{}".format(GCS_PASSWORD, self.desktop + dir_, GCS_USER, GCS_HOST, target_dir))
-            # ssh.exec_command('mkdir -p ' + target_dir)
-            # for item in os.listdir(self.desktop + dir_):
-            #     scp.put(self.desktop + dir_ + item, target_dir)
-            # self.put_dir(self.desktop + '/Telemetry_Data/', '~/Desktop')
         return True
 
     def put_dir(self, source, target):
@@ -445,10 +420,8 @@ class PAL:
             created under target. 
         """
         for item in os.listdir(source):
-            # if os.path.isfile(os.path.join(source, item)):
             if os.path.isfile(source + item):
-                print 'isfile'
-                # self.scp.put(os.path.join(source, item), '%s/%s' % (target, item))
+                # print 'isfile'
                 self.scp.put(source + item, '%s/%s' % (target, item))
             else:
                 self.mkdir('%s/%s' % (target, item), ignore_existing=True)

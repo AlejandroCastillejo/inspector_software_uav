@@ -1,7 +1,0 @@
-<launch>
-
-  <node pkg="software_onboard" name="software_onboard" type="SoftwareOnboard" output="screen">
-    
-  </node>
-
-</launch>

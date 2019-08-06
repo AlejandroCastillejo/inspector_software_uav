@@ -10,7 +10,6 @@ stop_client = rospy.ServiceProxy ('stop_service', StopService)
 def main():
     rospy.init_node('battery_checker')
 
-
     def dji_battery_cb(data):
         percentage = data.percentage
         # print ('battery percentage: ', percentage)
@@ -21,8 +20,6 @@ def main():
                 return resp
             except rospy.ServiceException, e:
                 print "Stop service call failed: %s"%e
-
-        
 
     dji_battery_subscriber = rospy.Subscriber("dji_sdk/battery_state", BatteryState, dji_battery_cb, queue_size=10)
 
