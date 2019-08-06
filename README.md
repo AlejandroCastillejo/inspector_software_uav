@@ -4,7 +4,7 @@ ROS-based software for PV plants inspections. The project is divided into ground
 
 This package contains the aerial segment, to be installed on each UAV on-board computer.
 
-You can find the ground segment [here](https://github.com/AlejandroCastillejo/inspector_gcs)
+You can find the ground segment [here](http://olaf.grupotsk.com:8080/inspector/us/inspector_gcs.git)
 
 ## How to build and install inspector_software_uav
 
