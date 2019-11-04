@@ -1,6 +1,6 @@
 <launch>
 
-  <arg name="n_uav" default="uav_2"/>
+  <arg name="n_uav" default="m_600"/>
   <arg name="acept_radio" default="1.1"/>
   <arg name="rgb_images_on" default="False"/>
   <arg name="thermal_images_on" default="False"/>
