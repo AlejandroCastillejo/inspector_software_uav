@@ -31,7 +31,8 @@ flight_status = UInt8()
 current_pos = PointStamped()
 current_gps_pos = NavSatFix()
 current_vel = Vector3Stamped()
-current_state = UInt8()
+ual_state = UInt8()
+last_ual_state = UInt8()
 adl_state = String()
 
 ## Json files with mission information
@@ -67,7 +68,7 @@ class Standby_State(smach.State):
         global adl_state
         adl_state = 'Standby'
         # register uav_id in gcs
-        print ('waiting for uav_link service...')
+        rospy.loginfo('waiting for uav_link service...')
         rospy.wait_for_service('/uav_link_service')
         try:
             rospy.loginfo('uav: %s calling uav_link_service', uav_id)
@@ -207,11 +208,12 @@ class TakeOff_State(smach.State):
         rospy.wait_for_service('ual/take_off')
             
         # Start recording telemetry data
-        resp_telemetry = pal.telemetry_data_client(True)
-        if resp_telemetry:
-            rospy.loginfo('ADL: Saving telemetry data')
-        else:
-            rospy.logwarn('ADL: Error saving telemetry data')
+        if record_telemetry:
+            resp_telemetry = pal.telemetry_data_client(True)
+            if resp_telemetry:
+                rospy.loginfo('ADL: Recording telemetry data')
+            else:
+                rospy.logwarn('ADL: Error recording telemetry data')
         
         # Calling take off
         try:
@@ -222,10 +224,10 @@ class TakeOff_State(smach.State):
             else:
                 rospy.loginfo('ADL: Take Off Failed')
 
-            while not(current_state == State.FLYING_AUTO):
+            while not(ual_state == State.FLYING_AUTO):
                 if stop_flag:    # Mission manually stopped or battery low
                     rospy.loginfo('ADL: Mission stopped... Waiting for take Off to be finished')
-                    while not(current_state == State.FLYING_AUTO):
+                    while not(ual_state == State.FLYING_AUTO):
                         rospy.sleep(1)
                     return 'stop_mission' 
                 rospy.sleep(0.1)
@@ -429,16 +431,32 @@ class Land_State(smach.State):
     def execute(self,userdata):
         global adl_state
         adl_state = 'Landing'
-        rospy.wait_for_service('ual/land')
-        land_client = rospy.ServiceProxy ('ual/land', Land)
-        resp = land_client(False)
-        if resp:
-            rospy.loginfo('ADL: Mission status: Landing')
-        else:
-            rospy.loginfo('ADL: Land Failed')
-        while flight_status != 0:
-            rospy.sleep(0.1)
+
+        landing = True
+        while landing and not rospy.is_shutdown():
+            rospy.wait_for_service('ual/land')
+            land_client = rospy.ServiceProxy ('ual/land', Land)
+            resp = land_client(False)
+            if resp:
+                rospy.loginfo('ADL: Mission status: Landing')
+                while ual_state == State.LANDING:
+                    rospy.sleep(0.1)
+                landing = False
+            else:
+                rospy.loginfo('ADL: Land Failed')
+                rospy.sleep(5)
         return 'landed'
+
+        # rospy.wait_for_service('ual/land')
+        # land_client = rospy.ServiceProxy ('ual/land', Land)
+        # resp = land_client(False)
+        # if resp:
+            # rospy.loginfo('ADL: Mission status: Landing')
+        # else:
+            # rospy.loginfo('ADL: Land Failed')
+        # while flight_status != 0:
+            # rospy.sleep(0.1)
+        # return 'landed'
 
 
 # Landed
@@ -452,11 +470,12 @@ class Landed_State(smach.State):
         rospy.loginfo('ADL: Mission status: Landed')
         
         ## Stop recording telemetry data
-        resp_telemetry = pal.telemetry_data_client(False)
-        if resp_telemetry:
-            rospy.loginfo('ADL: Stop saving telemetry data')
-        else:
-            rospy.logwarn('ADL: Error at stop saving telemetry data')
+        if record_telemetry:
+            resp_telemetry = pal.telemetry_data_client(False)
+            if resp_telemetry:
+                rospy.loginfo('ADL: Stop recording telemetry data')
+            else:
+                rospy.logwarn('ADL: Error at stop recording telemetry data')
         ## 
             
         if auto_download:
@@ -626,11 +645,13 @@ def main():
     rospy.loginfo('starting ADL...')
 
     ## ROS params
-    global uav_id, acept_radio, rgb_images_on, thermal_images_on
+    global uav_id, autopilot, acept_radio, rgb_images_on, thermal_images_on, stop_distance, record_telemetry
     uav_id = rospy.get_param('~uav_id', 'uav_1')
+    autopilot = rospy.get_param('~autopilot', 'dji')
     acept_radio = rospy.get_param('acept_radio', 1.2)
     rgb_images_on = rospy.get_param('~rgb_images_on', False)
     thermal_images_on = rospy.get_param('~thermal_images_on', False)
+    record_telemetry = rospy.get_param('~record_telemetry', False)
     stop_distance = rospy.get_param('~stop_distance', 10)
 
     # uav_id = rospy.get_param('uav_id', 1)
@@ -650,11 +671,18 @@ def main():
     # Define ADL State publisher
     adl_state_pub = rospy.Publisher('adl_state', String, queue_size=10)
 
-    # Subscribe to dji gps position
+    # Define global position publisher
+    global_pos_publisher = rospy.Publisher('global_position', NavSatFix, queue_size=10)
+
+    # Subscribe to gps position
     def global_pos_cb(pose):
         global current_gps_pos
         current_gps_pos = pose
-    global_pos_subscriber =rospy.Subscriber("dji_sdk/gps_position", NavSatFix, global_pos_cb, queue_size=1)
+    
+    if autopilot == 'dji':
+        global_pos_subscriber = rospy.Subscriber("dji_sdk/gps_position", NavSatFix, global_pos_cb, queue_size=1)
+    elif autopilot == 'mavros':
+        global_pos_subscriber = rospy.Subscriber("mavros/global_position/global", NavSatFix, global_pos_cb, queue_size=1)
    
     # Subscribe to ual/pose topic
     def local_pos_cb(pose):
@@ -676,8 +704,12 @@ def main():
 
     # Subscribe to ual/state topic
     def ual_state_cb(state):
-        global current_state
-        current_state = state.state
+        global ual_state
+        global last_ual_state
+        ual_state = state.state
+        if ual_state != last_ual_state:
+            rospy.loginfo('ADL: ual state: %s' %(ual_state))
+        last_ual_state = ual_state
     ual_state_subscriber = rospy.Subscriber("ual/state", State, ual_state_cb, queue_size=1)
     
     # Subscribe to flight status topic
@@ -694,6 +726,7 @@ def main():
     def main_thread():
         while not rospy.is_shutdown():
             adl_state_pub.publish(adl_state)
+            global_pos_publisher.publish(current_gps_pos)
             rospy.sleep(0.5)
     t = threading.Thread(target=main_thread)
     t.start()

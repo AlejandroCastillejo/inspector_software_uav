@@ -28,6 +28,11 @@ https://github.com/AlejandroCastillejo/grvc-ual/tree/dji_1.0
 
 ### Other dependencies 
 
+ * ROS-multimaster-fkie:
+    ```
+    sudo apt-get install ros-kinetic-multimaster-fkie
+    ```
+
  * usb_cam driver:
     ```
     sudo apt-get install ros-kinetic-usb-cam
