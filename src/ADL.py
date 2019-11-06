@@ -199,7 +199,7 @@ class TakeOff_State(smach.State):
         #self.end = False
 
     def execute(self, userdata):
-        global adl_state
+        global adl_state, stop_flag
         adl_state = 'Taking Off'
         with open(mission_waypoints_file) as f:
             mission = json.load(f)
@@ -230,6 +230,7 @@ class TakeOff_State(smach.State):
                     rospy.loginfo('ADL: Mission stopped... Waiting for take Off to be finished')
                     while not(ual_state == State.FLYING_AUTO):
                         rospy.sleep(1)
+                    stop_flag = False
                     return 'stop_mission' 
                 rospy.sleep(0.1)
             rospy.sleep(1)
@@ -246,7 +247,7 @@ class GoToWp01_State(smach.State):
         smach.State.__init__(self, outcomes=['at_WayPoint_01','stop_mission'])
 
     def execute(self,userdata):
-        global adl_state
+        global adl_state, stop_flag
         adl_state = 'Going to fist WP'
         rospy.loginfo('ADL: Mission status: Positioning... flying on safe height')
 
@@ -259,6 +260,7 @@ class GoToWp01_State(smach.State):
       
         goToWaypoint_function(self, target_wp, True, True)
         if stop_flag:    # Mission manually stopped or battery low
+            stop_flag = False
             return 'stop_mission'
         rospy.loginfo('at wp 01')
                
@@ -271,7 +273,7 @@ class GoToWp1_State(smach.State):
         smach.State.__init__(self, outcomes=['at_WayPoint_1','stop_mission'])
 
     def execute(self,userdata):
-        global adl_state
+        global adl_state, stop_flag
         adl_state = 'Going to sweep height'
         rospy.loginfo('ADL: Mission status: Possitioning... going to sweep height')
         with open(mission_waypoints_file) as f:
@@ -283,6 +285,7 @@ class GoToWp1_State(smach.State):
 
         goToWaypoint_function(self, target_wp, True, False)
         if stop_flag:    # Mission manually stopped or battery low
+            stop_flag = False
             return 'stop_mission'
 
         ## Starting captures
@@ -339,7 +342,7 @@ class Sweep_State(smach.State):
         status ={'paused_mission' : 'False'}
         with open(mission_status_file, 'w') as f:
             json.dump(status, f)
-        rospy.sleep(1)        
+        rospy.sleep(3)        
         return 'sweep_finished'
             
 # Go to h_d
@@ -348,7 +351,7 @@ class GoToHd_State(smach.State):
         smach.State.__init__(self, outcomes=['at_h_d'])
 
     def execute(self,userdata):
-        global adl_state
+        global adl_state, stop_flag
         adl_state = 'Going back home'
         ## Stop captures
         if rgb_images_on:
@@ -365,23 +368,25 @@ class GoToHd_State(smach.State):
                 rospy.logwarn("ADL: Can't connect with Thermal Camera")
     
         ## Stop UAV
-        rospy.loginfo("ADL: Stopping UAV")
+        if stop_flag:
+            rospy.loginfo("ADL: Stopping UAV")
 
-        with open(mission_waypoints_file) as f:
-            mission = json.load(f)
-        current_wp = mission['path'][0]
-        next_wp = mission['path'][1]
-        x_ref = next_wp['x'] - current_wp['x']
-        y_ref = next_wp['y'] - current_wp['y']
-        r = math.sqrt(x_ref**2 + y_ref**2)
-        stop_wp = PoseStamped()
-        stop_wp.pose.position.x = current_wp['x'] + x_ref/r * min(stop_distance, r)
-        stop_wp.pose.position.y = current_wp['y'] + y_ref/r * min(stop_distance, r)
-        stop_wp.pose.position.z = current_pos.point.z
-        print('current_wp: ', current_wp)
-        print('stop_wp: ', stop_wp)
-        goToWaypoint_function(self, stop_wp, False, False)
-        rospy.sleep(1)
+            with open(mission_waypoints_file) as f:
+                mission = json.load(f)
+            current_wp = mission['path'][0]
+            next_wp = mission['path'][1]
+            x_ref = next_wp['x'] - current_wp['x']
+            y_ref = next_wp['y'] - current_wp['y']
+            r = math.sqrt(x_ref**2 + y_ref**2)
+            stop_wp = PoseStamped()
+            stop_wp.pose.position.x = current_wp['x'] + x_ref/r * min(stop_distance, r)
+            stop_wp.pose.position.y = current_wp['y'] + y_ref/r * min(stop_distance, r)
+            stop_wp.pose.position.z = current_pos.point.z
+            print('current_wp: ', current_wp)
+            print('stop_wp: ', stop_wp)
+            goToWaypoint_function(self, stop_wp, False, False)
+            rospy.sleep(1)
+            stop_flag = False
         ##
 
         with open(mission_waypoints_file) as f:
@@ -568,7 +573,7 @@ def stop_mission_cb(req):
     global stop_flag
     stop_flag = True
     rospy.sleep(0.2)
-    stop_flag = False
+    # stop_flag = False
     return True
 
 def stop_mission_server():
@@ -583,6 +588,7 @@ set_pose_pub = rospy.Publisher('ual/set_pose', PoseStamped, queue_size=1)
 ##GO TO WAYPOINT FUNCTION
 
 def goToWaypoint_function (self, target_wp, stop_on, heading_on):
+    global stop_flag
     rospy.loginfo('ADL: going to WayPoint: x:{0}, y:{1}, z:{2}'.format(target_wp.pose.position.x, target_wp.pose.position.y, target_wp.pose.position.z))
     rospy.wait_for_service('ual/go_to_waypoint')
     go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
