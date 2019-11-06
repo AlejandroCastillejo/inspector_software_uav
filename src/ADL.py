@@ -14,7 +14,7 @@ import time
 import threading
 from std_msgs.msg import Float32, UInt8, String
 from geometry_msgs.msg import PoseStamped, PointStamped, Quaternion, TwistStamped, Vector3Stamped
-from sensor_msgs.msg import NavSatFix
+from sensor_msgs.msg import NavSatFix, BatteryState
 
 from inspector_software_uav.srv import *
 from uav_abstraction_layer.srv import *
@@ -30,6 +30,7 @@ loaded_mission = False
 flight_status = UInt8()
 current_pos = PointStamped()
 current_gps_pos = NavSatFix()
+battery_state = BatteryState()
 current_vel = Vector3Stamped()
 ual_state = UInt8()
 last_ual_state = UInt8()
@@ -271,7 +272,7 @@ class GoToWp1_State(smach.State):
 
     def execute(self,userdata):
         global adl_state
-        adl_state = 'Going to fist WP'
+        adl_state = 'Going to sweep height'
         rospy.loginfo('ADL: Mission status: Possitioning... going to sweep height')
         with open(mission_waypoints_file) as f:
             mission = json.load(f)
@@ -280,7 +281,7 @@ class GoToWp1_State(smach.State):
         target_wp.pose.position.y = mission['path'][0]['y']
         target_wp.pose.position.z = mission['path'][0]['z']
 
-        goToWaypoint_function(self, target_wp, True, True)
+        goToWaypoint_function(self, target_wp, True, False)
         if stop_flag:    # Mission manually stopped or battery low
             return 'stop_mission'
 
@@ -592,9 +593,11 @@ def goToWaypoint_function (self, target_wp, stop_on, heading_on):
         with open(mission_data_file) as f:
             data = json.load(f)
             # orientation = data['flight_angle'] + 90
-            orientation = -data['flight_angle'] - 90 
+            orientation = -data['flight_angle']
             if orientation > 180:
                 orientation -= 360
+            elif orientation < -180:
+                orientation +=360
             yaw = math.pi/180*orientation
             
     quat = quaternion_from_euler(0, 0, yaw)
@@ -673,14 +676,20 @@ def main():
 
     # Define global position publisher
     global_pos_publisher = rospy.Publisher('global_position', NavSatFix, queue_size=10)
+    battery_state_publisher = rospy.Publisher('battery_state', BatteryState, queue_size=1)
 
     # Subscribe to gps position
     def global_pos_cb(pose):
         global current_gps_pos
         current_gps_pos = pose
     
+    def battery_cb(msg):
+        global battery_state
+        battery_state = msg
+    
     if autopilot == 'dji':
         global_pos_subscriber = rospy.Subscriber("dji_sdk/gps_position", NavSatFix, global_pos_cb, queue_size=1)
+        battery_subscriber = rospy.Subscriber("dji_sdk/battery_state", BatteryState, battery_cb, queue_size=1)
     elif autopilot == 'mavros':
         global_pos_subscriber = rospy.Subscriber("mavros/global_position/global", NavSatFix, global_pos_cb, queue_size=1)
    
@@ -727,6 +736,7 @@ def main():
         while not rospy.is_shutdown():
             adl_state_pub.publish(adl_state)
             global_pos_publisher.publish(current_gps_pos)
+            battery_state_publisher.publish(battery_state)
             rospy.sleep(0.5)
     t = threading.Thread(target=main_thread)
     t.start()
