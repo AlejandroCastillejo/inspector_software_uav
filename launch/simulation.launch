@@ -44,8 +44,8 @@
   </node> 
   -->
 
-  <node pkg="uav_abstraction_layer" type="server" name="ual" ns="$(arg n_uav)" output="screen">
-      <param name="backend" value="dji"/>
+  <node pkg="ual_backend_dji_ros" type="ual_backend_dji_ros_server" name="ual" ns="$(arg n_uav)" output="screen">
+      <!-- <param name="backend" value="dji"/> -->
       <param name="laser_altimeter" value="false"/>
       <!-- <param name="laser_altimeter" value="true"/> -->
       <param name="self_arming" value="true"/>

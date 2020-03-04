@@ -29,7 +29,8 @@ GCS_USER = 'user'
 GCS_PASSWORD = 'password'
 
 # Thermal camera IP address, TCP port, user & password
-WIRIS_IP = '192.168.88.194'
+# WIRIS_IP = '192.168.88.194'
+WIRIS_IP = '10.0.0.230'
 WIRIS_TCP_PORT = 2240
 WIRIS_USER = 'wiris'
 WIRIS_PASSWORD = ''
