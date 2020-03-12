@@ -258,7 +258,7 @@ class GoToWp01_State(smach.State):
         target_wp.pose.position.y = mission['path'][0]['y']
         target_wp.pose.position.z = mission['h_d']
       
-        goToWaypoint_function(self, target_wp, True, True)
+        goToWaypoint_function(self, target_wp, True, 'Forwards')
         if stop_flag:    # Mission manually stopped or battery low
             stop_flag = False
             return 'stop_mission'
@@ -283,7 +283,7 @@ class GoToWp1_State(smach.State):
         target_wp.pose.position.y = mission['path'][0]['y']
         target_wp.pose.position.z = mission['path'][0]['z']
 
-        goToWaypoint_function(self, target_wp, True, False)
+        goToWaypoint_function(self, target_wp, True, 'False')
         if stop_flag:    # Mission manually stopped or battery low
             stop_flag = False
             return 'stop_mission'
@@ -330,7 +330,7 @@ class Sweep_State(smach.State):
             target_wp.pose.position.y = pos['y']
             target_wp.pose.position.z = pos['z']
 
-            goToWaypoint_function(self, target_wp, True, False)
+            goToWaypoint_function(self, target_wp, True, 'False')
             if stop_flag:    # Mission manually stopped or battery low
                 wp = {"x": current_pos.point.x, "y" : current_pos.point.y, "z" : current_pos.point.z}
                 wayPoints_left_.insert(0, wp)
@@ -384,7 +384,7 @@ class GoToHd_State(smach.State):
             stop_wp.pose.position.z = current_pos.point.z
             print('current_wp: ', current_wp)
             print('stop_wp: ', stop_wp)
-            goToWaypoint_function(self, stop_wp, False, False)
+            goToWaypoint_function(self, stop_wp, False, 'False')
             rospy.sleep(1)
             stop_flag = False
         ##
@@ -397,7 +397,7 @@ class GoToHd_State(smach.State):
         target_wp.pose.position.x = current_pos.point.x
         target_wp.pose.position.y = current_pos.point.y
         target_wp.pose.position.z = H_d
-        goToWaypoint_function(self, target_wp, False, False)
+        goToWaypoint_function(self, target_wp, False, 'False')
         rospy.sleep(1)
         return 'at_h_d'
 
@@ -425,7 +425,7 @@ class GoToWp00_State(smach.State):
         target_wp.pose.position.x = userdata.wp_00.point.x
         target_wp.pose.position.y = userdata.wp_00.point.y
         target_wp.pose.position.z = userdata.wp_00.point.z
-        goToWaypoint_function(self, target_wp, False, True)
+        goToWaypoint_function(self, target_wp, False, 'Backwards')
         rospy.sleep(1)
         return 'at_WayPoint_00'
 
@@ -587,14 +587,16 @@ set_pose_pub = rospy.Publisher('ual/set_pose', PoseStamped, queue_size=1)
 
 ##GO TO WAYPOINT FUNCTION
 
-def goToWaypoint_function (self, target_wp, stop_on, heading_on):
+def goToWaypoint_function (self, target_wp, stop_on, heading):
     global stop_flag
     rospy.loginfo('ADL: going to WayPoint: x:{0}, y:{1}, z:{2}'.format(target_wp.pose.position.x, target_wp.pose.position.y, target_wp.pose.position.z))
     rospy.wait_for_service('ual/go_to_waypoint')
     go_to_waypoint_client = rospy.ServiceProxy ('ual/go_to_waypoint', GoToWaypoint)
 
-    if heading_on and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
+    if heading == 'Forwards' and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
         yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
+    elif heading == 'Backwards' and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
+        yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x)) + math.pi
     else:
         with open(mission_data_file) as f:
             data = json.load(f)
