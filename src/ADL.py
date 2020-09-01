@@ -595,12 +595,17 @@ def goToWaypoint_function (self, target_wp, stop_on, heading):
 
     if heading == 'Forwards' and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
         yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x))
+<<<<<<< HEAD
         if yaw > math.pi:
             yaw -= 2*math.pi
     elif heading == 'Backwards' and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
         yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x)) + math.pi
         if yaw > math.pi:
             yaw -= 2*math.pi
+=======
+    elif heading == 'Backwards' and math.sqrt( (current_pos.point.x - target_wp.pose.position.x)**2 + (current_pos.point.y - target_wp.pose.position.y)**2) > acept_radio:
+        yaw = math.atan2((target_wp.pose.position.y - current_pos.point.y),  (target_wp.pose.position.x - current_pos.point.x)) + math.pi
+>>>>>>> 0ca66d7cd73e270c252b8e09781a5ea461069aa4
     else:
         with open(mission_data_file) as f:
             data = json.load(f)

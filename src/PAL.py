@@ -6,7 +6,7 @@ import rosbag
 import math
 import socket
 import ftplib
-import gphoto2 as gp
+# import gphoto2 as gp
 import threading
 import sys, os, os.path
 import csv
@@ -14,7 +14,7 @@ import time
 import datetime
 import paramiko
 from paramiko import SSHClient
-from scp import SCPClient
+# from scp import SCPClient
 
 from std_msgs.msg import Float64, Int32, Time
 from sensor_msgs.msg import Image, NavSatFix
@@ -28,8 +28,14 @@ GCS_HOST = '192.168.88.110'
 GCS_USER = 'alejandro'
 GCS_PASSWORD = 'a1'
 
-# Thermal camera IP address, TCP port, user & password
-WIRIS_IP = '192.168.88.194'
+# Thermal camera MODEL, IP address, TCP port, user & password
+thermal_camera = rospy.get_param('thermal_camera_model', 'WIRIS_PRO')
+if thermal_camera == 'WIRIS_2':
+    WIRIS_IP = '192.168.88.194'
+    WIRIS_CAPT_COMMAND = 'CIMG'
+elif thermal_camera == 'WIRIS_PRO':
+    WIRIS_IP = '10.0.0.230'
+    WIRIS_CAPT_COMMAND = 'CPTR\n'
 WIRIS_TCP_PORT = 2240
 WIRIS_USER = 'wiris'
 WIRIS_PASSWORD = ''
@@ -276,19 +282,31 @@ class PAL:
             try:
                 self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 rospy.loginfo('PAL: Opening socket connection')
+                print(WIRIS_IP)
                 self.s.connect((WIRIS_IP, WIRIS_TCP_PORT))
+                self.s.settimeout(5)
                 rospy.loginfo('PAL: Socket connection on')
-                self.s.send('HIWS')
-                connect_resp = self.s.recv(3)
-                if connect_resp == 'OK':
-                    self.s.send('SPET')
+                
+                self.s.send('HIWS\n')
+                time.sleep(0.5)
+                connect_resp = self.s.recv(8)
+                print(connect_resp)
+
+                # if connect_resp == 'OK':
+                if 'OK' in connect_resp:
+                    if thermal_camera == 'WIRIS_2':
+                        self.s.send('SPET')
                     rospy.loginfo("WIRIS Camera OK")
                     self.thermal_camera_connected = True
                 else:
                     rospy.logerr("PAL: WIRIS Connection Failed")
                 return True
-            except:
+                
+            except socket.error, e:
+                print('catch except:', e)
                 rospy.logerr("PAL: Can't open sockect connection with WIRIS")
+                self.s.close()
+                del self.s
                 return False
         else:
             rospy.loginfo('PAL: Thermal camera already connected')
@@ -322,6 +340,7 @@ class PAL:
             return True
         else:
             rospy.logerr('PAL: Thermal camera not connected')
+            return False
 
 
     def thermal_camera_capture_thread(self):
@@ -329,12 +348,15 @@ class PAL:
             while self.thermal_camera_capture:
                 interval = self.thermal_camera_shooting_distance / max(self.current_xy_vel, 2.0)
                 next_call = time.time() + interval
-                self.s.send('CIMG')
-                capt_resp = self.s.recv(3)
-                if capt_resp == 'OK':
+                self.s.send(WIRIS_CAPT_COMMAND)
+                capt_resp = self.s.recv(8)
+                print(capt_resp)
+                # if capt_resp == 'OK':
+                if 'OK' in capt_resp:
                     rospy.loginfo('PAL: Capturing Thermal Image')
                 else:
                     rospy.logerr("PAL: Can't capture Thermal Image")
+
                 if (next_call - time.time()) > 0:
                     time.sleep(next_call - time.time())
                 else:

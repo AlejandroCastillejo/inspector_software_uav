@@ -44,8 +44,8 @@
   </node> 
   -->
 
-  <node pkg="uav_abstraction_layer" type="server" name="ual" ns="$(arg n_uav)" output="screen">
-      <param name="backend" value="dji"/>
+  <node pkg="ual_backend_dji_ros" type="ual_backend_dji_ros_server" name="ual" ns="$(arg n_uav)" output="screen">
+      <!-- <param name="backend" value="dji"/> -->
       <param name="laser_altimeter" value="false"/>
       <!-- <param name="laser_altimeter" value="true"/> -->
       <param name="self_arming" value="true"/>
@@ -66,16 +66,15 @@
 
   <node pkg="inspector_software_uav" type="PAL.py" name="pal" ns="$(arg n_uav)" output="screen"/>
 
-  <node pkg="inspector_software_uav" type="battery_checker.py" name="battery_checker" ns="$(arg n_uav)" output="screen"/> 
+  <!-- <node pkg="inspector_software_uav" type="battery_checker.py" name="battery_checker" ns="$(arg n_uav)" output="screen"/>  -->
 
 
-  <node pkg="master_discovery_fkie" type="master_discovery" name="master_discovery" respawn="true" respawn_delay="5" />
+  <!-- <node pkg="master_discovery_fkie" type="master_discovery" name="master_discovery" respawn="true" respawn_delay="5" /> -->
   
-  <node pkg="master_sync_fkie" type="master_sync" name="master_sync" respawn="true" respawn_delay="5" >
-    <!-- <rosparam param="sync_nodes">[] </rosparam> -->
+  <!-- <node pkg="master_sync_fkie" type="master_sync" name="master_sync" respawn="true" respawn_delay="5" >
     <rosparam param="sync_services">[/uav_link_service] </rosparam>
     <rosparam param="sync_topics">[] </rosparam>
-  </node>
+  </node> -->
 
 
   <!-- <node pkg="master_sync_fkie" type="master_sync" name="master_sync" respawn="true" respawn_delay="5" >

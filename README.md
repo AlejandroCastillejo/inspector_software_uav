@@ -26,6 +26,11 @@ The next step is installing UAL for DJI autopilots. Clone the next repository an
 
 https://github.com/AlejandroCastillejo/grvc-ual/tree/dji_1.0
 
+The DJI SDK ROS package may require nmea_msgs. To install this dependency do:
+```
+apt-get install ros-kinetic-nmea-msgs
+```
+
 ### Other dependencies 
 
  * ROS-multimaster-fkie:
