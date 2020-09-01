@@ -299,12 +299,6 @@ class PAL:
 
         if self.thermal_camera_connected:
             if req.capture == True:
-                #
-                rospy.loginfo('opening thermal_camera_file')
-                self.thermal_camera_file = open(self.thermal_images_dir + 'thermal_images_{0}.csv'.format(self.mission_start_time.strftime("%Y-%m-%d %H:%M:%S")), 'a')
-                columns = ['Thermal Image', 'Time']
-                self.thermal_camera_file_writer = csv.DictWriter(self.thermal_camera_file, fieldnames=columns)                   
-                #
                 rospy.loginfo("WIRIS Camera starting secuence capture")
                 self.thermal_camera_capture = True                  
                 if not hasattr(self, 'thermal_camera_thread'):
@@ -313,12 +307,6 @@ class PAL:
             elif req.capture == False:
                 self.thermal_camera_capture = False
                 rospy.loginfo('PAL: Thermal camera capture stopped')
-                #
-                time.sleep(2)
-                if hasattr(self, 'thermal_camera_file'):
-                    print ('closing thermal_camera_file')
-                    self.thermal_camera_file.close()
-                #
             return True
         else:
             rospy.logerr('PAL: Thermal camera not connected')
@@ -339,14 +327,6 @@ class PAL:
                     time.sleep(next_call - time.time())
                 else:
                     rospy.logwarn('PAL: WIRIS Capture time exceeded interval in %f seconds', abs((next_call - time.time())))
-                
-                #
-                time_now = datetime.datetime.now()
-                filename = 'image_{0}.jpg'.format(time_now.strftime("%Y-%m-%d %H:%M:%S"))
-                rostime = Time()
-                rostime.data = rospy.get_rostime()
-                self.thermal_camera_file_writer.writerow({'Thermal Image':filename, 'Time':rospy.get_rostime()})
-                #
             # rospy.loginfo('PAL: exit Thermal camera capture thread')
             time.sleep(0.1)
         # sys.exit()
